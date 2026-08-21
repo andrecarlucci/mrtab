@@ -8,8 +8,8 @@ follows from that.
 
 ```
 ⌥ Tab      open the switcher, select the previous window
-⌥ ⇧ Tab    open it going backwards
-⌥ held     keep pressing Tab / ⇧Tab, or use the arrow keys
+⌥ held     tap Tab to move down the list, tap ⇧ to move back up
+           the arrow keys work too
 ⌥ release  switch to the highlighted window
 Esc        cancel and stay where you are
 Return     switch immediately

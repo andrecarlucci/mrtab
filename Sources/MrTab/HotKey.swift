@@ -8,50 +8,27 @@ import Carbon.HIToolbox
 /// Input Monitoring permission, and it keeps firing while the modifier is held — which is exactly
 /// the "hold and keep tabbing" behaviour the switcher needs.
 final class HotKeyManager {
-    /// Called with `true` to step forward, `false` to step backward.
-    var onTrigger: ((Bool) -> Void)?
+    var onTrigger: (() -> Void)?
 
     private var handlerRef: EventHandlerRef?
-    private var forwardRef: EventHotKeyRef?
-    private var backwardRef: EventHotKeyRef?
+    private var hotKeyRef: EventHotKeyRef?
 
     private static let signature: OSType = 0x4D525442 // 'MRTB'
-    private static let forwardID: UInt32 = 1
-    private static let backwardID: UInt32 = 2
+    private static let hotKeyID: UInt32 = 1
 
-    struct Result {
-        let forward: OSStatus
-        let backward: OSStatus
-        var ok: Bool { forward == noErr }
-    }
-
+    /// Stepping backwards is handled by the controller as a Shift press while the switcher is
+    /// open, not by a second hot key, so only the base shortcut is registered here.
     @discardableResult
-    func register(config: Config) -> Result {
+    func register(config: Config) -> OSStatus {
         installHandler()
-
-        let keyCode = config.carbonKeyCode
-        let modifiers = config.carbonModifiers
-
-        let forward = register(id: Self.forwardID, keyCode: keyCode,
-                               modifiers: modifiers, into: &forwardRef)
-        // Shift is the universal "go the other way" convention, so pair it with the base shortcut.
-        let backward = register(id: Self.backwardID, keyCode: keyCode,
-                                modifiers: modifiers | UInt32(shiftKey), into: &backwardRef)
-        return Result(forward: forward, backward: backward)
+        let id = EventHotKeyID(signature: Self.signature, id: Self.hotKeyID)
+        return RegisterEventHotKey(config.carbonKeyCode, config.carbonModifiers, id,
+                                   GetApplicationEventTarget(), 0, &hotKeyRef)
     }
 
     func unregister() {
-        if let forwardRef { UnregisterEventHotKey(forwardRef) }
-        if let backwardRef { UnregisterEventHotKey(backwardRef) }
-        forwardRef = nil
-        backwardRef = nil
-    }
-
-    private func register(id: UInt32, keyCode: UInt32, modifiers: UInt32,
-                          into ref: inout EventHotKeyRef?) -> OSStatus {
-        let hotKeyID = EventHotKeyID(signature: Self.signature, id: id)
-        return RegisterEventHotKey(keyCode, modifiers, hotKeyID,
-                                   GetApplicationEventTarget(), 0, &ref)
+        if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
+        hotKeyRef = nil
     }
 
     private func installHandler() {
@@ -70,7 +47,7 @@ final class HotKeyManager {
                 return OSStatus(eventNotHandledErr)
             }
             let manager = Unmanaged<HotKeyManager>.fromOpaque(userData).takeUnretainedValue()
-            manager.onTrigger?(hotKeyID.id == HotKeyManager.forwardID)
+            manager.onTrigger?()
             return noErr
         }, 1, &spec, context, &handlerRef)
     }

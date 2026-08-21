@@ -31,9 +31,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // as fast as the thousandth.
         controller.prewarm()
 
-        hotKeys.onTrigger = { [weak self] forward in
-            Log.write("hotkey fired forward=\(forward)")
-            self?.controller.trigger(forward: forward)
+        hotKeys.onTrigger = { [weak self] in
+            Log.write("hotkey fired")
+            self?.controller.trigger()
         }
 
         Permissions.requestAccessibility()
@@ -41,10 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             Log.write("accessibility trust granted; starting store")
             self.store.start()
-            let result = self.hotKeys.register(config: self.config)
-            Log.write("hotkey register \(self.config.displayName): "
-                      + "forward=\(result.forward) backward=\(result.backward)")
-            if !result.ok { self.warnHotKeyUnavailable() }
+            let status = self.hotKeys.register(config: self.config)
+            Log.write("hotkey register \(self.config.displayName): status=\(status)")
+            if status != noErr { self.warnHotKeyUnavailable() }
             self.refreshStatusItemTitle()
         }
     }

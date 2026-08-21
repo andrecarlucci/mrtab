@@ -16,6 +16,9 @@ final class SwitcherController {
     private var isVisible = false
     private var previousApp: NSRunningApplication?
 
+    /// Tracks Shift across flag changes so a press can be told from a release.
+    private var shiftWasDown = false
+
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var modifierPoll: Timer?
@@ -41,17 +44,17 @@ final class SwitcherController {
     // MARK: - Entry point
 
     /// Called from the hot key handler. Must stay cheap.
-    func trigger(forward: Bool) {
+    func trigger() {
         if isVisible {
-            step(by: forward ? 1 : -1)
+            step(by: 1)
         } else {
-            show(forward: forward)
+            show()
         }
     }
 
-    private func show(forward: Bool) {
+    private func show() {
         entries = store.snapshot
-        Log.write("show(forward: \(forward)) with \(entries.count) windows")
+        Log.write("show with \(entries.count) windows")
         guard !entries.isEmpty else {
             Log.write("nothing to show: window snapshot is empty")
             return
@@ -61,14 +64,16 @@ final class SwitcherController {
             SwitcherView.Row(appName: $0.appName, title: $0.title, pid: $0.pid,
                              isMinimized: $0.isMinimized, isAppHidden: $0.isAppHidden)
         }
-        // Index 0 is the window you are in right now, so forward lands on the previous one —
+        // Index 0 is the window you are in right now, so opening lands on the previous one —
         // the plain tap-and-release case switches straight back.
-        let initial = entries.count == 1 ? 0 : (forward ? 1 : entries.count - 1)
+        let initial = entries.count == 1 ? 0 : 1
 
         panel.switcherView.setRows(rows, selected: initial)
         panel.positionForDisplay(width: config.panelWidth)
 
         previousApp = NSWorkspace.shared.frontmostApplication
+        // Shift may already be down when the switcher opens; only later presses should step back.
+        shiftWasDown = NSEvent.modifierFlags.contains(.shift)
         isVisible = true
 
         panel.makeKeyAndOrderFront(nil)
@@ -129,6 +134,14 @@ final class SwitcherController {
                 commit()
                 return true
             }
+            // Backwards is a Shift press while the browse modifier is held — not a second hot
+            // key. Tapping Shift repeatedly walks back up the list. Skipped when Shift *is* the
+            // browse modifier, where the two meanings would collide.
+            if config.cocoaModifier != .shift {
+                let shiftDown = event.modifierFlags.contains(.shift)
+                if shiftDown && !shiftWasDown { step(by: -1) }
+                shiftWasDown = shiftDown
+            }
             return false
         }
 
@@ -141,6 +154,11 @@ final class SwitcherController {
             step(by: 1)
         case kVK_UpArrow, kVK_LeftArrow:
             step(by: -1)
+        case kVK_Tab:
+            // Plain modifier+Tab is swallowed by the hot key, so a Tab arriving here means Shift
+            // was also held. The Shift press has already stepped back; swallow the Tab rather
+            // than stepping twice or letting it escape to another app.
+            break
         case kVK_ANSI_W:
             closeSelectedWindow()
         default:
