@@ -58,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setUpStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "square.stack",
-                                     accessibilityDescription: "mrtab")
+                                     accessibilityDescription: "MrTab")
         item.button?.image?.isTemplate = true
 
         let menu = NSMenu()
@@ -75,7 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Accessibility settings\u{2026}", action: #selector(openSettings), keyEquivalent: "")
             .target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit mrtab", action: #selector(quit), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit MrTab", action: #selector(quit), keyEquivalent: "q")
             .target = self
 
         item.menu = menu

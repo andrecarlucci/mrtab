@@ -7,7 +7,7 @@ import AppKit
 /// Both appearances are rendered, since the row text uses dynamic system colours that resolve
 /// against the effective appearance at draw time.
 ///
-///     MRTAB_RENDER=/tmp/switcher.png build/mrtab.app/Contents/MacOS/mrtab
+///     MRTAB_RENDER=/tmp/switcher.png build/MrTab.app/Contents/MacOS/MrTab
 ///     # writes /tmp/switcher-dark.png and /tmp/switcher-light.png
 enum SelfTest {
     static func renderIfRequested(config: Config) -> Bool {

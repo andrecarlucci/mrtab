@@ -1,13 +1,13 @@
 import Foundation
 
-/// Appends to ~/Library/Logs/mrtab.log.
+/// Appends to ~/Library/Logs/MrTab.log.
 ///
 /// An agent app has no console and no window to report into, and the two things most likely to
 /// go wrong — Accessibility trust and hot key registration — both fail silently. This makes them
 /// visible.
 enum Log {
     static let url = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Logs/mrtab.log")
+        .appendingPathComponent("Library/Logs/MrTab.log")
 
     private static let queue = DispatchQueue(label: "dev.mrtab.log")
     private static let formatter: DateFormatter = {

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds mrtab.app.
+# Builds MrTab.app.
 #
 #   --debug              unoptimised build
 #   --run                launch when done
@@ -25,16 +25,16 @@ for arg in "$@"; do
     esac
 done
 
-APP="build/mrtab.app"
+APP="build/MrTab.app"
 
 echo "==> swift build -c $CONFIGURATION"
 swift build -c "$CONFIGURATION"
-BINARY="$(swift build -c "$CONFIGURATION" --show-bin-path)/mrtab"
+BINARY="$(swift build -c "$CONFIGURATION" --show-bin-path)/MrTab"
 
 echo "==> assembling $APP"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BINARY" "$APP/Contents/MacOS/mrtab"
+cp "$BINARY" "$APP/Contents/MacOS/MrTab"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
 IDENTITY="${MRTAB_SIGN_IDENTITY:--}"
@@ -50,12 +50,12 @@ echo "    cdhash $(codesign -dvvv "$APP" 2>&1 | awk -F= '/^CDHash/{print $2}')"
 
 if [ "$RESET" -eq 1 ]; then
     echo "==> tccutil reset Accessibility $BUNDLE_ID"
-    pkill -x mrtab 2>/dev/null || true
+    pkill -x MrTab 2>/dev/null || true
     tccutil reset Accessibility "$BUNDLE_ID" >/dev/null 2>&1 || true
     echo "    grant cleared; the next launch will prompt again"
 fi
 
 if [ "$RUN" -eq 1 ]; then
-    pkill -x mrtab 2>/dev/null || true
+    pkill -x MrTab 2>/dev/null || true
     open "$APP"
 fi

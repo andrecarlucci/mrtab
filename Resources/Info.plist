@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>mrtab</string>
+    <string>MrTab</string>
     <key>CFBundleDisplayName</key>
-    <string>mrtab</string>
+    <string>MrTab</string>
     <key>CFBundleExecutable</key>
-    <string>mrtab</string>
+    <string>MrTab</string>
     <key>CFBundleIdentifier</key>
     <string>dev.mrtab.app</string>
     <key>CFBundlePackageType</key>
@@ -24,6 +24,6 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSAccessibilityUsageDescription</key>
-    <string>mrtab needs Accessibility access to list your open windows and bring one to the front.</string>
+    <string>MrTab needs Accessibility access to list your open windows and bring one to the front.</string>
 </dict>
 </plist>

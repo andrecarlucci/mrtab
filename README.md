@@ -1,4 +1,4 @@
-# mrtab
+# MrTab
 
 A window switcher for macOS, in the spirit of [AltTab](https://github.com/lwouis/alt-tab-macos).
 It lists every open window — not every app — and switches to the one you pick.
@@ -20,7 +20,7 @@ W          close the highlighted window
 
 ## How it stays fast
 
-There is no work on the hotkey path. When you press the shortcut, mrtab reads an array that is
+There is no work on the hotkey path. When you press the shortcut, MrTab reads an array that is
 already sitting in memory and calls `orderFront` on a window that already exists.
 
 - **The window list is built ahead of time.** Enumerating windows means Accessibility IPC to every
@@ -44,14 +44,14 @@ already sitting in memory and calls `orderFront` on a window that already exists
 Requires the Xcode command line tools. No Xcode project, no dependencies.
 
 ```sh
-./build.sh          # produces build/mrtab.app
+./build.sh          # produces build/MrTab.app
 ./build.sh --run    # build, then launch it
 ./build.sh --debug  # unoptimised build
 ```
 
 ## First run
 
-mrtab needs **Accessibility** access to list windows and raise one. On first launch macOS will
+MrTab needs **Accessibility** access to list windows and raise one. On first launch macOS will
 prompt; grant it under System Settings → Privacy & Security → Accessibility. The app polls for the
 grant and starts working the moment it is given — no restart needed.
 
@@ -70,32 +70,32 @@ The fix is to clear the stale entry and grant it again:
 
 ```sh
 ./build.sh --reset-permission
-open build/mrtab.app          # prompts fresh; re-add mrtab in System Settings
+open build/MrTab.app          # prompts fresh; re-add MrTab in System Settings
 ```
 
 To stop it happening at all, sign with a stable identity. Create a self-signed code signing
 certificate once (Keychain Access → Certificate Assistant → Create a Certificate → name it
-`mrtab-dev`, type *Code Signing*), then:
+`MrTab-dev`, type *Code Signing*), then:
 
 ```sh
-MRTAB_SIGN_IDENTITY=mrtab-dev ./build.sh
+MRTAB_SIGN_IDENTITY=MrTab-dev ./build.sh
 ```
 
 TCC keys the grant on the certificate rather than the binary hash, so it survives rebuilds.
 
 ### Diagnosing
 
-mrtab logs to `~/Library/Logs/mrtab.log`. It records the trust state at launch, the result of hot
+MrTab logs to `~/Library/Logs/MrTab.log`. It records the trust state at launch, the result of hot
 key registration, every time the shortcut fires, and how many windows each invocation found —
 which is enough to tell "not trusted", "shortcut taken by another app" and "no windows" apart.
 
 ```sh
-tail -f ~/Library/Logs/mrtab.log
+tail -f ~/Library/Logs/MrTab.log
 ```
 
 ## Configuration
 
-`~/.config/mrtab/config.json`, written with defaults on first launch. Restart mrtab to apply.
+`~/.config/mrtab/config.json`, written with defaults on first launch. Restart MrTab to apply.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -109,7 +109,7 @@ tail -f ~/Library/Logs/mrtab.log
 | `maxVisibleRows` | `12` | Rows shown before the list scrolls |
 | `fullRefreshInterval` | `15` | Seconds between safety-net rescans |
 
-Setting `modifier` to `"command"` makes mrtab compete with the system switcher rather than replace
+Setting `modifier` to `"command"` makes MrTab compete with the system switcher rather than replace
 it — macOS wins that fight for `⌘ Tab`. Replacing `⌘ Tab` outright needs a `CGEventTap` and Input
 Monitoring permission, which is not implemented here.
 
