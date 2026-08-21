@@ -14,14 +14,7 @@ enum SelfTest {
         guard let path = ProcessInfo.processInfo.environment["MRTAB_RENDER"] else { return false }
         let base = URL(fileURLWithPath: path).deletingPathExtension().path
 
-        let rows = makeRows()
-        for (suffix, appearance, backdrop) in [
-            ("dark", NSAppearance.Name.darkAqua, NSColor(calibratedWhite: 0.17, alpha: 1)),
-            ("light", NSAppearance.Name.aqua, NSColor(calibratedWhite: 0.93, alpha: 1)),
-        ] {
-            render(rows: rows, config: config, appearance: appearance,
-                   backdrop: backdrop, to: "\(base)-\(suffix).png")
-        }
+        render(rows: makeRows(), config: config, to: "\(base).png")
         return true
     }
 
@@ -43,25 +36,38 @@ enum SelfTest {
             : rows
     }
 
-    private static func render(rows: [SwitcherView.Row], config: Config,
-                               appearance: NSAppearance.Name, backdrop: NSColor, to path: String) {
+    private static func render(rows: [SwitcherView.Row], config: Config, to path: String) {
         let view = SwitcherView()
-        view.appearance = NSAppearance(named: appearance)
         view.configure(rowHeight: config.rowHeight, maxVisibleRows: config.maxVisibleRows)
         view.setRows(rows, selected: min(1, rows.count - 1))
         view.frame = NSRect(x: 0, y: 0, width: config.panelWidth, height: view.contentHeight)
 
-        // The real panel sits on a blurred backdrop supplied by NSVisualEffectView; stand in for
-        // it with a flat fill so contrast is judgeable.
-        view.wantsLayer = true
-        view.layer?.backgroundColor = backdrop.cgColor
-        view.layer?.cornerRadius = 14
+        // Render over a stand-in for blurred wallpaper rather than a flat fill. Flat backdrops
+        // flatter the design: the contrast that actually matters is against whatever colours
+        // happen to be behind the panel.
+        let backdrop = BackdropView(frame: view.bounds)
+        backdrop.appearance = NSAppearance(named: SwitcherPanel.appearanceName)
+        backdrop.addSubview(view)
 
-        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
-        view.cacheDisplay(in: view.bounds, to: rep)
+        guard let rep = backdrop.bitmapImageRepForCachingDisplay(in: backdrop.bounds) else { return }
+        backdrop.cacheDisplay(in: backdrop.bounds, to: rep)
         guard let png = rep.representation(using: .png, properties: [:]) else { return }
         try? png.write(to: URL(fileURLWithPath: path))
         FileHandle.standardOutput.write(Data("rendered \(rows.count) rows to \(path)\n".utf8))
+    }
+
+    /// Approximates a colourful desktop seen through the panel's vibrancy material.
+    private final class BackdropView: NSView {
+        override func draw(_ dirtyRect: NSRect) {
+            NSGradient(colors: [
+                NSColor(calibratedRed: 0.15, green: 0.55, blue: 0.80, alpha: 1),
+                NSColor(calibratedRed: 0.92, green: 0.55, blue: 0.20, alpha: 1),
+                NSColor(calibratedRed: 0.97, green: 0.94, blue: 0.70, alpha: 1),
+                NSColor(calibratedRed: 0.20, green: 0.15, blue: 0.40, alpha: 1),
+            ])?.draw(in: bounds, angle: 25)
+            NSColor.black.withAlphaComponent(0.55).setFill()
+            bounds.fill(using: .sourceOver)
+        }
     }
 
     private static let sampleTitles = [

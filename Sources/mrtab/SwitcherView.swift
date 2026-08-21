@@ -90,11 +90,22 @@ final class SwitcherView: NSView {
             ])
 
         if !row.title.isEmpty && row.title != row.appName {
+            // Only the separator is dimmed. The window title is the thing you are actually
+            // scanning for, so it is drawn at full strength like the app name -- the two are
+            // told apart by weight. Dimming it made it legible only on the selected row, whose
+            // solid accent fill happens to guarantee contrast.
             result.append(NSAttributedString(
-                string: "  \u{2014}  " + row.title,
+                string: "  \u{2014}  ",
                 attributes: [
                     .font: NSFont.systemFont(ofSize: 13, weight: .regular),
                     .foregroundColor: NSColor.secondaryLabelColor,
+                    .paragraphStyle: paragraph,
+                ]))
+            result.append(NSAttributedString(
+                string: row.title,
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 13, weight: .regular),
+                    .foregroundColor: NSColor.labelColor,
                     .paragraphStyle: paragraph,
                 ]))
         }
@@ -102,6 +113,11 @@ final class SwitcherView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        // The panel is translucent, so without this the legibility of every row would depend on
+        // whatever happens to be behind it. The scrim keeps the base tone constant.
+        NSColor.black.withAlphaComponent(0.38).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 14, yRadius: 14).fill()
+
         guard !rows.isEmpty else {
             drawEmptyState()
             return
@@ -167,7 +183,7 @@ final class SwitcherView: NSView {
     private func drawBadge(_ text: String, in rect: NSRect, selected: Bool) -> CGFloat {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),
-            .foregroundColor: selected ? NSColor.white.withAlphaComponent(0.85) : NSColor.tertiaryLabelColor,
+            .foregroundColor: selected ? NSColor.white.withAlphaComponent(0.85) : NSColor.secondaryLabelColor,
         ]
         let string = NSAttributedString(string: text, attributes: attributes)
         let size = string.size()

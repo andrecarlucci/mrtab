@@ -6,6 +6,11 @@ import AppKit
 /// instantiation. A borderless `NSPanel` is used so it can appear over full-screen apps and on
 /// every Space without disturbing the current app's window ordering.
 final class SwitcherPanel: NSPanel {
+    /// The switcher is always a dark HUD, exactly like the system Command-Tab switcher, rather
+    /// than following the system theme. Pinning it means the material and the dynamic text
+    /// colours can never disagree about which one of them is dark.
+    static let appearanceName: NSAppearance.Name = .vibrantDark
+
     let switcherView = SwitcherView()
 
     private let visualEffect = NSVisualEffectView()
@@ -36,6 +41,8 @@ final class SwitcherPanel: NSPanel {
         let contentRect = NSRect(x: 0, y: 0, width: config.panelWidth, height: 100)
         visualEffect.frame = contentRect
         switcherView.frame = contentRect
+
+        appearance = NSAppearance(named: Self.appearanceName)
 
         visualEffect.material = .hudWindow
         visualEffect.blendingMode = .behindWindow

@@ -128,6 +128,18 @@ Monitoring permission, which is not implemented here.
 | `Log.swift` | Append-only log; an agent app has no console to fail loudly in |
 | `SelfTest.swift` | `MRTAB_RENDER=x.png` renders the list offscreen, no permissions needed |
 
+### A note on legibility
+
+The panel is translucent, so anything drawn at partial opacity competes with whatever is behind
+it. Row text is therefore drawn at full strength and the app name is distinguished from the window
+title by *weight* rather than opacity, over a scrim that keeps the base tone constant. The panel
+also pins itself to a dark appearance rather than following the system theme — like the system
+Command-Tab switcher — so the vibrancy material and the dynamic text colours can never disagree
+about which of them is dark.
+
+`SelfTest` renders over a stand-in for colourful wallpaper for this reason. A flat backdrop
+flatters the design and hides exactly the contrast failures that matter.
+
 ## Known limitations
 
 - No live window thumbnails. Icons and titles only — a deliberate choice, since thumbnails need
