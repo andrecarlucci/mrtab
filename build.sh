@@ -3,8 +3,12 @@
 #
 #   --debug              unoptimised build
 #   --universal          fat binary for both Apple Silicon and Intel, for running on another Mac
+#   --package            also produce build/MrTab-<version>.tar.gz for distribution
 #   --run                launch when done
 #   --reset-permission   clear the Accessibility grant so the next launch prompts again
+#
+# Set MRTAB_VERSION to stamp a version into the bundle. CI sets it per build; locally the
+# version in Resources/Info.plist is left alone.
 #
 # Signing: set MRTAB_SIGN_IDENTITY to a code signing identity to get a stable signature that
 # survives rebuilds. Without one the bundle is ad-hoc signed, and every rebuild invalidates the
@@ -21,10 +25,13 @@ CONFIGURATION=release
 RUN=0
 RESET=0
 UNIVERSAL=0
+PACKAGE=0
+VERSION="${MRTAB_VERSION:-}"
 for arg in "$@"; do
     case "$arg" in
         --debug)             CONFIGURATION=debug ;;
         --universal)         UNIVERSAL=1 ;;
+        --package)           PACKAGE=1 ;;
         --run)               RUN=1 ;;
         --reset-permission)  RESET=1 ;;
         *) echo "unknown option: $arg" >&2; exit 1 ;;
@@ -57,6 +64,11 @@ else
     cp "${SLICES[0]}" "$APP/Contents/MacOS/MrTab"
 fi
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+if [ -n "$VERSION" ]; then
+    echo "==> stamping version $VERSION"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
+fi
 
 # The icon is drawn by the app itself, so the artwork is source rather than a checked-in binary.
 echo "==> generating app icon"
@@ -76,6 +88,14 @@ codesign --force --sign "$IDENTITY" --timestamp=none "$APP" >/dev/null 2>&1
 echo "built $APP"
 echo "    arch   $(lipo -archs "$APP/Contents/MacOS/MrTab")"
 echo "    cdhash $(codesign -dvvv "$APP" 2>&1 | awk -F= '/^CDHash/{print $2}')"
+
+if [ "$PACKAGE" -eq 1 ]; then
+    ARCHIVE="MrTab${VERSION:+-$VERSION}.tar.gz"
+    # tar rather than zip: unpacking a downloaded zip by double-click stamps the extracted app
+    # with com.apple.quarantine, whereas `tar -xz` does not propagate it.
+    tar -czf "build/$ARCHIVE" -C build MrTab.app
+    echo "packaged build/$ARCHIVE"
+fi
 
 if [ "$RESET" -eq 1 ]; then
     echo "==> tccutil reset Accessibility $BUNDLE_ID"

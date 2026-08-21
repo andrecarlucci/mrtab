@@ -1,0 +1,85 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A release is cut per push, so overlapping runs would race for the same tag.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          swift --version
+          xcodebuild -version
+
+      - name: Derive version
+        id: version
+        run: echo "value=0.1.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build universal bundle
+        env:
+          MRTAB_VERSION: ${{ steps.version.outputs.value }}
+        run: ./build.sh --universal --package
+
+      - name: Verify the bundle
+        run: |
+          set -euo pipefail
+          BIN=build/MrTab.app/Contents/MacOS/MrTab
+          echo "architectures: $(lipo -archs "$BIN")"
+          lipo -archs "$BIN" | grep -q arm64
+          lipo -archs "$BIN" | grep -q x86_64
+          codesign --verify --deep --strict --verbose=2 build/MrTab.app
+          test -f build/MrTab.app/Contents/Resources/AppIcon.icns
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" build/MrTab.app/Contents/Info.plist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MrTab-${{ steps.version.outputs.value }}
+          path: build/MrTab-*.tar.gz
+          if-no-files-found: error
+
+      - name: Publish release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          # Quoted heredoc so the shell leaves the markdown alone, then substitute the version.
+          cat > notes.md <<'MD'
+          ### Install
+
+          ```sh
+          curl -L https://github.com/andrecarlucci/mrtab/releases/download/vTAG/MrTab-TAG.tar.gz | tar -xz -C /Applications
+          open /Applications/MrTab.app
+          ```
+
+          Then grant Accessibility when prompted: System Settings → Privacy & Security → Accessibility.
+
+          Universal (Apple Silicon and Intel), macOS 13 or later.
+
+          > Unpack with `tar` as above rather than by double-clicking a downloaded archive. This
+          > build is ad-hoc signed rather than notarised, and Archive Utility stamps whatever it
+          > extracts with `com.apple.quarantine`, which Gatekeeper then blocks. `tar` does not.
+          > If you do end up with a blocked copy: `xattr -dr com.apple.quarantine /Applications/MrTab.app`
+          MD
+          sed -i '' "s|TAG|$VERSION|g" notes.md
+
+          gh release create "v$VERSION" build/MrTab-*.tar.gz \
+            --title "MrTab $VERSION" \
+            --notes-file notes.md
