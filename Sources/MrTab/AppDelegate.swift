@@ -49,6 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.controller.trigger()
         }
 
+        showSettingsIfUserLaunched()
+
         Permissions.requestAccessibility()
         Permissions.waitForTrust { [weak self] in
             guard let self else { return }
@@ -60,6 +62,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         hotKeys.unregister()
+    }
+
+    /// Opening a menu bar app gives no sign that anything happened, which is worse here than
+    /// usual: without Accessibility the shortcut silently does nothing, so "I opened it and the
+    /// shortcut is dead" looks identical to "it did not start". Settings doubles as the receipt,
+    /// and carries the permission banner.
+    ///
+    /// It must not appear at login. macOS offers no dependable way to ask whether this launch
+    /// came from the login item -- XPC_SERVICE_NAME is set for an ordinary Finder launch too --
+    /// so two signals are combined: MrTab is registered to open at login, *and* the machine has
+    /// only just come up. Registration alone is too broad, since it would also swallow the
+    /// deliberate launches this exists for.
+    ///
+    /// The gap is logging out and back in without rebooting, where uptime is already large and
+    /// Settings will appear once. That is rarer than a reboot, and far less annoying than the
+    /// alternative failure, which is opening the app and getting no sign of life at all.
+    private func showSettingsIfUserLaunched() {
+        let uptime = ProcessInfo.processInfo.systemUptime
+        if LoginItem.isEnabled && uptime < Self.loginLaunchWindow {
+            Log.write("login launch (uptime \(Int(uptime))s); leaving Settings closed")
+            return
+        }
+        openSettings()
+    }
+
+    /// How soon after boot a launch is assumed to be the login item rather than the user.
+    private static let loginLaunchWindow: TimeInterval = 180
+
+    /// Fires when the app is opened again while already running -- double-clicking it in
+    /// Applications, or clicking it in the Dock.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openSettings()
+        return true
     }
 
     /// Two copies of MrTab -- typically a build in the repo and one in /Applications -- share a

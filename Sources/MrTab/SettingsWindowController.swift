@@ -2,7 +2,7 @@ import AppKit
 
 /// The settings window. Changes take effect immediately and are written straight to disk —
 /// there is no OK/Cancel, which suits a utility whose whole surface is a handful of toggles.
-final class SettingsWindowController: NSWindowController {
+final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private var config: Config
     private let onChange: (Config) -> Void
 
@@ -18,6 +18,11 @@ final class SettingsWindowController: NSWindowController {
     private var rowsSlider: NSSlider!
     private var rowsLabel: NSTextField!
 
+    private var banner: BannerView!
+    private var bannerLabel: NSTextField!
+    private var bannerButton: NSButton!
+    private var permissionPoll: Timer?
+
     private static let repositoryURL = URL(string: "https://github.com/andrecarlucci/mrtab")!
 
     init(config: Config, onChange: @escaping (Config) -> Void) {
@@ -30,6 +35,8 @@ final class SettingsWindowController: NSWindowController {
         window.title = "MrTab Settings"
         window.isReleasedWhenClosed = false
         super.init(window: window)
+
+        window.delegate = self
 
         let content = buildContent()
         window.contentView = content
@@ -45,6 +52,40 @@ final class SettingsWindowController: NSWindowController {
         // An accessory app has to activate explicitly, or the window opens behind everything.
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+        refreshPermissionBanner()
+        startPermissionPoll()
+    }
+
+    /// Trust is granted out of process with no notification to observe, so the banner is polled
+    /// while the window is on screen, and left alone when it is not.
+    private func startPermissionPoll() {
+        permissionPoll?.invalidate()
+        let timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.refreshPermissionBanner()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        permissionPoll = timer
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        permissionPoll?.invalidate()
+        permissionPoll = nil
+    }
+
+    private func refreshPermissionBanner() {
+        let trusted = Permissions.isTrusted
+        banner.isWarning = !trusted
+        bannerLabel.stringValue = trusted
+            ? "Accessibility access granted. The shortcut is live."
+            : "MrTab needs Accessibility access to list your windows. "
+              + "Until that is granted, the shortcut does nothing."
+        bannerButton.isHidden = trusted
+        banner.needsDisplay = true
+    }
+
+    @objc private func openAccessibilitySettings() {
+        Permissions.requestAccessibility()
+        Permissions.openAccessibilitySettings()
     }
 
     // MARK: - Layout
@@ -70,7 +111,19 @@ final class SettingsWindowController: NSWindowController {
         (rowsSlider, rowsLabel) = slider(Config.visibleRowsRange, Double(config.maxVisibleRows),
                                          #selector(changeRows), suffix: " rows", integral: true)
 
+        banner = BannerView()
+        bannerLabel = label("", size: 12)
+        bannerLabel.lineBreakMode = .byWordWrapping
+        bannerLabel.usesSingleLineMode = false
+        bannerLabel.preferredMaxLayoutWidth = 290
+        bannerButton = NSButton(title: "Open System Settings", target: self,
+                                action: #selector(openAccessibilitySettings))
+        bannerButton.bezelStyle = .rounded
+        banner.install(label: bannerLabel, button: bannerButton)
+        refreshPermissionBanner()
+
         let stack = NSStackView(views: [
+            banner,
             section("Shortcut", [
                 labelled("Open switcher", recorder),
                 hint("Hold the modifier to keep browsing. Tap Tab to move down the list, "
@@ -275,5 +328,42 @@ private extension NSBox {
         box.translatesAutoresizingMaskIntoConstraints = false
         box.widthAnchor.constraint(equalToConstant: 452).isActive = true
         return box
+    }
+}
+
+
+/// A tinted rounded panel: amber while a permission is missing, green once it is granted.
+///
+/// This exists because the app's only failure mode that matters is invisible -- without
+/// Accessibility the shortcut silently does nothing, and nothing on screen says so.
+final class BannerView: NSView {
+    var isWarning = true
+
+    override var isFlipped: Bool { true }
+
+    func install(label: NSTextField, button: NSButton) {
+        let stack = NSStackView(views: [label, button])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
+        ])
+        widthAnchor.constraint(equalToConstant: 452).isActive = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let fill = isWarning ? NSColor.systemOrange.withAlphaComponent(0.15)
+                             : NSColor.systemGreen.withAlphaComponent(0.13)
+        let border = isWarning ? NSColor.systemOrange.withAlphaComponent(0.55)
+                               : NSColor.systemGreen.withAlphaComponent(0.45)
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 8, yRadius: 8)
+        fill.setFill(); path.fill()
+        border.setStroke(); path.lineWidth = 1; path.stroke()
     }
 }
