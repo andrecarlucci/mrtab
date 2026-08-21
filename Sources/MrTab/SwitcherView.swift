@@ -32,17 +32,23 @@ final class SwitcherView: NSView {
     private var titleStrings: [NSAttributedString] = []
     private var widestAppName: CGFloat = 0
 
+    private static let iconSide: CGFloat = 26
+
     private let padding: CGFloat = 8
-    private let iconSide: CGFloat = 26
     private let rowInset: CGFloat = 6
     private let iconGap: CGFloat = 10
     private let columnGap: CGFloat = 14
     /// The app name column never takes more than this share of the panel, however long the
     /// longest name is, so the titles always get room.
     private let maxColumnShare: CGFloat = 0.40
-    private let headerHeight: CGFloat = 34
+    private let headerHeight: CGFloat = 38
     private let gearSide: CGFloat = 16
-    private let brandIconSide: CGFloat = 18
+
+    /// Left edge of the icon column, and of the text column beside it. The header uses these too,
+    /// so the app icon and the word MrTab line up with the rows below rather than being placed
+    /// by eye.
+    private var iconLeft: CGFloat { rowInset + iconGap }
+    private var textLeft: CGFloat { iconLeft + Self.iconSide + iconGap }
 
     private var gearRect: NSRect = .zero
     private var gearHovered = false
@@ -176,9 +182,8 @@ final class SwitcherView: NSView {
             NSBezierPath(roundedRect: rect.insetBy(dx: 0, dy: 2), xRadius: 8, yRadius: 8).fill()
         }
 
-        let iconRect = NSRect(x: rect.minX + iconGap,
-                              y: rect.midY - iconSide / 2,
-                              width: iconSide, height: iconSide)
+        let iconRect = NSRect(x: iconLeft, y: rect.midY - Self.iconSide / 2,
+                              width: Self.iconSide, height: Self.iconSide)
         IconCache.shared.icon(for: row.pid)?.draw(
             in: iconRect, from: .zero, operation: .sourceOver,
             fraction: row.isMinimized || row.isAppHidden ? 0.55 : 1.0)
@@ -189,7 +194,7 @@ final class SwitcherView: NSView {
         }
 
         let textTop = rect.midY - 9
-        let appRect = NSRect(x: iconRect.maxX + iconGap, y: textTop, width: columnWidth, height: 18)
+        let appRect = NSRect(x: textLeft, y: textTop, width: columnWidth, height: 18)
         (selected ? Self.whitened(app) : app)
             .draw(with: appRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
 
@@ -203,17 +208,15 @@ final class SwitcherView: NSView {
     }
 
     private func drawHeader() {
-        let icon = Self.brandIcon
-        let iconRect = NSRect(x: 14, y: (headerHeight - brandIconSide) / 2,
-                              width: brandIconSide, height: brandIconSide)
-        icon?.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1)
+        let iconRect = NSRect(x: iconLeft, y: (headerHeight - Self.iconSide) / 2,
+                              width: Self.iconSide, height: Self.iconSide)
+        Self.brandIcon?.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1)
 
         let name = NSAttributedString(string: "MrTab", attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
             .foregroundColor: NSColor.labelColor,
         ])
-        let nameSize = name.size()
-        name.draw(at: NSPoint(x: iconRect.maxX + 8, y: (headerHeight - nameSize.height) / 2))
+        name.draw(at: NSPoint(x: textLeft, y: (headerHeight - name.size().height) / 2))
 
         gearRect = NSRect(x: bounds.width - 14 - gearSide, y: (headerHeight - gearSide) / 2,
                           width: gearSide, height: gearSide)
@@ -239,12 +242,11 @@ final class SwitcherView: NSView {
     }()
 
     private static let brandIcon: NSImage? = {
-        let icon = NSApp.applicationIconImage
-        guard let icon else { return nil }
-        let scaled = NSImage(size: NSSize(width: 18, height: 18))
+        guard let icon = NSApp.applicationIconImage else { return nil }
+        let scaled = NSImage(size: NSSize(width: iconSide, height: iconSide))
         scaled.lockFocus()
         NSGraphicsContext.current?.imageInterpolation = .high
-        icon.draw(in: NSRect(x: 0, y: 0, width: 18, height: 18))
+        icon.draw(in: NSRect(x: 0, y: 0, width: iconSide, height: iconSide))
         scaled.unlockFocus()
         return scaled
     }()
