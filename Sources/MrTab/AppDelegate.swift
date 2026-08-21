@@ -1,11 +1,18 @@
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var config = Config()
     private var store: WindowStore!
     private var controller: SwitcherController!
     private let hotKeys = HotKeyManager()
+
     private var statusItem: NSStatusItem?
+    private var settings: SettingsWindowController?
+
+    private enum Tag: Int {
+        case status = 1
+        case login = 2
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -19,11 +26,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         }
+        if IconGenerator.runIfRequested() {
+            NSApp.terminate(nil)
+            return
+        }
 
         config.writeIfMissing()
 
         store = WindowStore(config: config)
         controller = SwitcherController(config: config, store: store)
+        controller.onOpenSettings = { [weak self] in self?.openSettings() }
 
         setUpStatusItem()
 
@@ -41,15 +53,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             Log.write("accessibility trust granted; starting store")
             self.store.start()
-            let status = self.hotKeys.register(config: self.config)
-            Log.write("hotkey register \(self.config.displayName): status=\(status)")
-            if status != noErr { self.warnHotKeyUnavailable() }
-            self.refreshStatusItemTitle()
+            self.registerHotKey()
         }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         hotKeys.unregister()
+    }
+
+    // MARK: - Configuration
+
+    private func applyConfig(_ updated: Config) {
+        let shortcutChanged = updated.shortcut != config.shortcut
+        config = updated
+        store?.update(config: config)
+        controller?.apply(config: config)
+        if shortcutChanged { registerHotKey() }
+        refreshStatusItemTitle()
+    }
+
+    private func registerHotKey() {
+        let status = hotKeys.register(shortcut: config.shortcut)
+        Log.write("hotkey register \(config.displayName): status=\(status)")
+        if status == noErr {
+            refreshStatusItemTitle()
+        } else {
+            warnHotKeyUnavailable()
+        }
+    }
+
+    private func openSettings() {
+        if settings == nil {
+            settings = SettingsWindowController(config: config) { [weak self] updated in
+                self?.applyConfig(updated)
+            }
+        }
+        settings?.refresh(config: config)
+        settings?.show()
     }
 
     // MARK: - Status item
@@ -61,17 +101,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.image?.isTemplate = true
 
         let menu = NSMenu()
+        menu.delegate = self
+
         let status = NSMenuItem(title: "Waiting for Accessibility access\u{2026}", action: nil, keyEquivalent: "")
         status.isEnabled = false
-        status.tag = 1
+        status.tag = Tag.status.rawValue
         menu.addItem(status)
         menu.addItem(.separator())
 
+        menu.addItem(withTitle: "Settings\u{2026}", action: #selector(showSettings), keyEquivalent: ",")
+            .target = self
+
+        let login = NSMenuItem(title: "Open at Login", action: #selector(toggleLogin), keyEquivalent: "")
+        login.target = self
+        login.tag = Tag.login.rawValue
+        menu.addItem(login)
+
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Rescan windows", action: #selector(rescan), keyEquivalent: "")
             .target = self
         menu.addItem(withTitle: "Open config file\u{2026}", action: #selector(openConfig), keyEquivalent: "")
             .target = self
-        menu.addItem(withTitle: "Accessibility settings\u{2026}", action: #selector(openSettings), keyEquivalent: "")
+        menu.addItem(withTitle: "Accessibility settings\u{2026}", action: #selector(openAccessibility), keyEquivalent: "")
             .target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit MrTab", action: #selector(quit), keyEquivalent: "q")
@@ -81,30 +132,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = item
     }
 
+    /// The login item can be switched off from System Settings, so the tick is resolved when the
+    /// menu opens rather than cached.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.item(withTag: Tag.login.rawValue)?.state = LoginItem.isEnabled ? .on : .off
+    }
+
     private func refreshStatusItemTitle() {
-        guard let status = statusItem?.menu?.item(withTag: 1) else { return }
-        status.title = "Shortcut: \(config.displayName)"
+        statusItem?.menu?.item(withTag: Tag.status.rawValue)?.title = "Shortcut: \(config.displayName)"
     }
 
     private func warnHotKeyUnavailable() {
-        guard let status = statusItem?.menu?.item(withTag: 1) else { return }
-        status.title = "\(config.displayName) is taken by another app"
+        statusItem?.menu?.item(withTag: Tag.status.rawValue)?.title =
+            "\(config.displayName) is taken by another app"
     }
 
-    @objc private func rescan() {
-        store.requestRefresh()
+    // MARK: - Menu actions
+
+    @objc private func showSettings() { openSettings() }
+
+    @objc private func toggleLogin() {
+        let wanted = !LoginItem.isEnabled
+        if let failure = LoginItem.setEnabled(wanted) {
+            let alert = NSAlert()
+            alert.messageText = "Could not \(wanted ? "enable" : "disable") opening at login"
+            alert.informativeText = failure
+            alert.runModal()
+        }
+        settings?.refresh(config: config)
     }
+
+    @objc private func rescan() { store?.requestRefresh() }
 
     @objc private func openConfig() {
         config.writeIfMissing()
         NSWorkspace.shared.open(Config.path)
     }
 
-    @objc private func openSettings() {
-        Permissions.openAccessibilitySettings()
-    }
+    @objc private func openAccessibility() { Permissions.openAccessibilitySettings() }
 
-    @objc private func quit() {
-        NSApp.terminate(nil)
-    }
+    @objc private func quit() { NSApp.terminate(nil) }
 }

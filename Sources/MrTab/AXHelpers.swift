@@ -1,3 +1,4 @@
+import AppKit
 import ApplicationServices
 import Foundation
 
@@ -70,4 +71,18 @@ func axElement(_ element: AXUIElement, _ attribute: String) -> AXUIElement? {
     guard let value = axCopy(element, attribute),
           CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
     return (value as! AXUIElement)
+}
+
+extension NSImage {
+    /// Renders a template image through a solid colour.
+    func tinted(with color: NSColor) -> NSImage {
+        let result = NSImage(size: size)
+        result.lockFocus()
+        color.set()
+        let rect = NSRect(origin: .zero, size: size)
+        draw(in: rect)
+        rect.fill(using: .sourceAtop)
+        result.unlockFocus()
+        return result
+    }
 }

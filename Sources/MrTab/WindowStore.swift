@@ -30,7 +30,7 @@ final class WindowStore {
     /// Main-thread-only. Read this from the hotkey handler; never touch AX there.
     private(set) var snapshot: [WindowEntry] = []
 
-    private let config: Config
+    private var config: Config
     private let queue = DispatchQueue(label: "dev.mrtab.store", qos: .userInitiated)
 
     /// Everything below is confined to `queue`.
@@ -70,6 +70,15 @@ final class WindowStore {
         subscribeToWorkspace()
         queue.async { [weak self] in self?.performFullRefresh() }
         startRefreshTimer()
+    }
+
+    /// Adopts settings changed from the settings window and republishes with the new filters.
+    func update(config: Config) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.config = config
+            self.publish()
+        }
     }
 
     /// Nudges a rescan. Called after the switcher closes so the next invocation is accurate.

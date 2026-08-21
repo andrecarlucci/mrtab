@@ -19,10 +19,11 @@ final class HotKeyManager {
     /// Stepping backwards is handled by the controller as a Shift press while the switcher is
     /// open, not by a second hot key, so only the base shortcut is registered here.
     @discardableResult
-    func register(config: Config) -> OSStatus {
+    func register(shortcut: Shortcut) -> OSStatus {
+        unregister()
         installHandler()
         let id = EventHotKeyID(signature: Self.signature, id: Self.hotKeyID)
-        return RegisterEventHotKey(config.carbonKeyCode, config.carbonModifiers, id,
+        return RegisterEventHotKey(UInt32(shortcut.keyCode), shortcut.carbonModifiers, id,
                                    GetApplicationEventTarget(), 0, &hotKeyRef)
     }
 

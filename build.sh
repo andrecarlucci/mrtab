@@ -58,6 +58,13 @@ else
 fi
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
+# The icon is drawn by the app itself, so the artwork is source rather than a checked-in binary.
+echo "==> generating app icon"
+rm -rf build/MrTab.iconset
+MRTAB_MAKE_ICONSET=build/MrTab.iconset "$APP/Contents/MacOS/MrTab" >/dev/null
+iconutil -c icns build/MrTab.iconset -o "$APP/Contents/Resources/AppIcon.icns"
+rm -rf build/MrTab.iconset
+
 IDENTITY="${MRTAB_SIGN_IDENTITY:--}"
 if [ "$IDENTITY" = "-" ]; then
     echo "==> codesign (ad-hoc; rebuilds invalidate the Accessibility grant)"

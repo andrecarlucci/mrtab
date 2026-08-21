@@ -15,6 +15,7 @@ enum SelfTest {
         let base = URL(fileURLWithPath: path).deletingPathExtension().path
 
         render(rows: makeRows(), config: config, to: "\(base).png")
+        renderSettings(config: config, to: "\(base)-settings.png")
         return true
     }
 
@@ -54,6 +55,20 @@ enum SelfTest {
         guard let png = rep.representation(using: .png, properties: [:]) else { return }
         try? png.write(to: URL(fileURLWithPath: path))
         FileHandle.standardOutput.write(Data("rendered \(rows.count) rows to \(path)\n".utf8))
+    }
+
+    /// Hand-built AutoLayout is where a settings pane silently goes wrong, so it gets the same
+    /// offscreen check as the switcher.
+    private static func renderSettings(config: Config, to path: String) {
+        let controller = SettingsWindowController(config: config, onChange: { _ in })
+        guard let content = controller.window?.contentView else { return }
+        content.layoutSubtreeIfNeeded()
+        guard let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { return }
+        content.cacheDisplay(in: content.bounds, to: rep)
+        guard let png = rep.representation(using: .png, properties: [:]) else { return }
+        try? png.write(to: URL(fileURLWithPath: path))
+        let note = "rendered settings \(Int(content.bounds.width))x\(Int(content.bounds.height)) to \(path)\n"
+        FileHandle.standardOutput.write(Data(note.utf8))
     }
 
     /// Approximates a colourful desktop seen through the panel's vibrancy material.

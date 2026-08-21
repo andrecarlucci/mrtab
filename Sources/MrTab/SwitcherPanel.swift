@@ -65,6 +65,11 @@ final class SwitcherPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
+    /// Applies settings changed while the app is running.
+    func apply(config: Config) {
+        switcherView.configure(rowHeight: config.rowHeight, maxVisibleRows: config.maxVisibleRows)
+    }
+
     /// Forces the window server to allocate the backing store and run one full draw pass, so the
     /// first real invocation is not paying for it. Called once, off-screen, at launch.
     func prewarm() {

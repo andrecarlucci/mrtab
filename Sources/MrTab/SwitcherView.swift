@@ -17,6 +17,7 @@ final class SwitcherView: NSView {
 
     var onHover: ((Int) -> Void)?
     var onClick: ((Int) -> Void)?
+    var onSettings: (() -> Void)?
 
     private(set) var rows: [Row] = []
     private(set) var selectedIndex = 0
@@ -39,6 +40,12 @@ final class SwitcherView: NSView {
     /// The app name column never takes more than this share of the panel, however long the
     /// longest name is, so the titles always get room.
     private let maxColumnShare: CGFloat = 0.40
+    private let headerHeight: CGFloat = 34
+    private let gearSide: CGFloat = 16
+    private let brandIconSide: CGFloat = 18
+
+    private var gearRect: NSRect = .zero
+    private var gearHovered = false
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -73,8 +80,11 @@ final class SwitcherView: NSView {
 
     /// Height the panel needs for the current rows.
     var contentHeight: CGFloat {
-        CGFloat(visibleRowCount) * rowHeight + padding * 2
+        headerHeight + CGFloat(visibleRowCount) * rowHeight + padding * 2
     }
+
+    /// Y of the first row. Everything below the header is offset by this.
+    private var rowsTop: CGFloat { headerHeight + padding }
 
     var visibleRowCount: Int { max(1, min(rows.count, maxVisibleRows)) }
 
@@ -138,6 +148,8 @@ final class SwitcherView: NSView {
         NSColor.black.withAlphaComponent(0.38).setFill()
         NSBezierPath(roundedRect: bounds, xRadius: 14, yRadius: 14).fill()
 
+        drawHeader()
+
         guard !rows.isEmpty else {
             drawEmptyState()
             return
@@ -148,7 +160,7 @@ final class SwitcherView: NSView {
         let columnWidth = appColumnWidth
 
         for index in scrollOffset..<upperBound {
-            let y = padding + CGFloat(index - scrollOffset) * rowHeight
+            let y = rowsTop + CGFloat(index - scrollOffset) * rowHeight
             let rowRect = NSRect(x: rowInset, y: y, width: bounds.width - rowInset * 2, height: rowHeight)
             draw(row: rows[index], app: appStrings[index], title: titleStrings[index],
                  in: rowRect, columnWidth: columnWidth, selected: index == selectedIndex)
@@ -190,6 +202,53 @@ final class SwitcherView: NSView {
             .draw(with: titleRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
     }
 
+    private func drawHeader() {
+        let icon = Self.brandIcon
+        let iconRect = NSRect(x: 14, y: (headerHeight - brandIconSide) / 2,
+                              width: brandIconSide, height: brandIconSide)
+        icon?.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1)
+
+        let name = NSAttributedString(string: "MrTab", attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .foregroundColor: NSColor.labelColor,
+        ])
+        let nameSize = name.size()
+        name.draw(at: NSPoint(x: iconRect.maxX + 8, y: (headerHeight - nameSize.height) / 2))
+
+        gearRect = NSRect(x: bounds.width - 14 - gearSide, y: (headerHeight - gearSide) / 2,
+                          width: gearSide, height: gearSide)
+        if let gear = Self.gearIcon {
+            // The whole header is the hit target's neighbourhood, so brightening on hover is the
+            // only affordance telling you the gear is clickable.
+            gear.draw(in: gearRect, from: .zero, operation: .sourceOver,
+                      fraction: gearHovered ? 1.0 : 0.6)
+        }
+
+        NSColor.separatorColor.withAlphaComponent(0.5).setFill()
+        NSRect(x: 12, y: headerHeight - 1, width: bounds.width - 24, height: 1).fill()
+    }
+
+    /// Tinting is done once and cached: a template image has to be redrawn through a colour to
+    /// take one, and that is not work for a draw path this hot.
+    private static let gearIcon: NSImage? = {
+        let configuration = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        guard let symbol = NSImage(systemSymbolName: "gearshape",
+                                   accessibilityDescription: "Settings")?
+            .withSymbolConfiguration(configuration) else { return nil }
+        return symbol.tinted(with: .labelColor)
+    }()
+
+    private static let brandIcon: NSImage? = {
+        let icon = NSApp.applicationIconImage
+        guard let icon else { return nil }
+        let scaled = NSImage(size: NSSize(width: 18, height: 18))
+        scaled.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        icon.draw(in: NSRect(x: 0, y: 0, width: 18, height: 18))
+        scaled.unlockFocus()
+        return scaled
+    }()
+
     private func badgeText(for row: Row) -> String? {
         if row.isMinimized { return "minimized" }
         if row.isAppHidden { return "hidden" }
@@ -212,7 +271,8 @@ final class SwitcherView: NSView {
         guard rows.count > visible else { return }
         NSColor.tertiaryLabelColor.setFill()
         if scrollOffset > 0 {
-            NSBezierPath(roundedRect: NSRect(x: bounds.midX - 8, y: 3, width: 16, height: 2),
+            NSBezierPath(roundedRect: NSRect(x: bounds.midX - 8, y: headerHeight + 3,
+                                             width: 16, height: 2),
                          xRadius: 1, yRadius: 1).fill()
         }
         if scrollOffset + visible < rows.count {
@@ -227,7 +287,8 @@ final class SwitcherView: NSView {
             .foregroundColor: NSColor.secondaryLabelColor,
         ])
         let size = string.size()
-        string.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
+        string.draw(at: NSPoint(x: bounds.midX - size.width / 2,
+                                y: headerHeight + (bounds.height - headerHeight - size.height) / 2))
     }
 
     // MARK: - Mouse
@@ -242,19 +303,32 @@ final class SwitcherView: NSView {
 
     private func rowIndex(at point: NSPoint) -> Int? {
         guard !rows.isEmpty else { return nil }
-        let offset = point.y - padding
+        let offset = point.y - rowsTop
         guard offset >= 0 else { return nil }
         let index = scrollOffset + Int(offset / rowHeight)
         return index < rows.count ? index : nil
     }
 
     override func mouseMoved(with event: NSEvent) {
-        guard let index = rowIndex(at: convert(event.locationInWindow, from: nil)) else { return }
+        let point = convert(event.locationInWindow, from: nil)
+
+        let overGear = gearRect.contains(point)
+        if overGear != gearHovered {
+            gearHovered = overGear
+            needsDisplay = true
+        }
+        // Moving across the header must not drag the selection with it.
+        guard point.y >= headerHeight, let index = rowIndex(at: point) else { return }
         onHover?(index)
     }
 
     override func mouseDown(with event: NSEvent) {
-        guard let index = rowIndex(at: convert(event.locationInWindow, from: nil)) else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        if gearRect.contains(point) {
+            onSettings?()
+            return
+        }
+        guard point.y >= headerHeight, let index = rowIndex(at: point) else { return }
         onClick?(index)
     }
 

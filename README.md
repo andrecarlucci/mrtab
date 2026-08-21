@@ -16,6 +16,8 @@ Return     switch immediately
 W          close the highlighted window
 ```
 
+The shortcut is whatever you set it to; `⌥ Tab` is only the default.
+
 `⌘ Tab` is left alone — the macOS app switcher keeps working as it always did.
 
 ## How it stays fast
@@ -49,6 +51,9 @@ Requires the Xcode command line tools. No Xcode project, no dependencies.
 ./build.sh --debug      # unoptimised build
 ./build.sh --universal  # fat binary for both Apple Silicon and Intel
 ```
+
+The app icon is drawn in code by `IconGenerator` and turned into an `.icns` during the build, so
+the artwork is source you can diff rather than a checked-in binary.
 
 A plain build targets only the machine that built it. `--universal` cross-compiles both slices and
 `lipo`s them together; it needs nothing beyond the command line tools, since it spells out the
@@ -133,14 +138,31 @@ corrupt.
 Nothing else travels with the app: `~/.config/mrtab/config.json` and `~/Library/Logs/MrTab.log` are
 per-machine, and Accessibility has to be granted separately on each Mac.
 
+## Settings
+
+The panel has a header with the app icon, its name, and a gear on the far right; clicking the gear
+dismisses the switcher and opens Settings. The same window is on the menu bar item under
+**Settings…** (⌘,), which is the way in when the switcher is not open.
+
+Settings covers the shortcut, which windows get listed, the panel's proportions, and whether MrTab
+opens at login. There is no OK or Cancel — changes apply the moment you make them and are written
+straight to disk, which suits a utility whose whole surface is a handful of toggles.
+
+To change the shortcut, click the shortcut field and press the combination you want. It has to
+include ⌘, ⌥ or ⌃: the modifier is not decoration, it is what holds the switcher open, and Shift
+alone will not do because Shift already means "step backwards". Esc leaves the field alone.
+
+**Open at Login** is also a toggle on the menu bar item. It uses `SMAppService`, which registers
+the bundle at its current path — move MrTab and you need to switch it off and on again.
+
 ## Configuration
 
-`~/.config/mrtab/config.json`, written with defaults on first launch. Restart MrTab to apply.
+Settings writes `~/.config/mrtab/config.json`; you can also edit it directly, in which case
+restart MrTab to apply.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `modifier` | `"option"` | Hold-to-browse modifier: `option`, `command`, `control`, `shift` |
-| `key` | `"tab"` | Trigger key: `tab`, `space`, `` ` ``, `escape` |
+| `shortcut` | `{"keyCode": 48, "modifiers": ["option"]}` | Virtual key code plus modifier names |
 | `includeMinimized` | `true` | List minimized windows |
 | `includeHidden` | `true` | List windows of hidden apps |
 | `showAllSpaces` | `true` | When `false`, only windows on the current Space |
@@ -149,9 +171,13 @@ per-machine, and Accessibility has to be granted separately on each Mac.
 | `maxVisibleRows` | `12` | Rows shown before the list scrolls |
 | `fullRefreshInterval` | `15` | Seconds between safety-net rescans |
 
-Setting `modifier` to `"command"` makes MrTab compete with the system switcher rather than replace
-it — macOS wins that fight for `⌘ Tab`. Replacing `⌘ Tab` outright needs a `CGEventTap` and Input
-Monitoring permission, which is not implemented here.
+Key codes are positional rather than characters, which is why the shortcut UI is the easier way to
+set this. The older `{"modifier": "option", "key": "tab"}` form is still read, and is rewritten to
+the structured form the first time settings are saved.
+
+Choosing `⌘ Tab` makes MrTab compete with the system switcher rather than replace it — macOS wins
+that fight. Replacing `⌘ Tab` outright needs a `CGEventTap` and Input Monitoring permission, which
+is not implemented here.
 
 ## Layout
 
@@ -164,7 +190,12 @@ Monitoring permission, which is not implemented here.
 | `HotKey.swift` | Carbon `RegisterEventHotKey` registration |
 | `WindowStore` ↔ `AXHelpers.swift` | Typed wrappers over the Accessibility C API |
 | `IconCache.swift` | Pre-scaled app icons by pid |
-| `Config.swift` | JSON settings and shortcut translation |
+| `Config.swift` | JSON settings, loading and saving |
+| `Shortcut.swift` | Modifier+key model, Carbon translation, key code names |
+| `SettingsWindowController.swift` | The settings window |
+| `ShortcutRecorderView.swift` | Click-then-press shortcut field |
+| `LoginItem.swift` | Launch at login via `SMAppService` |
+| `IconGenerator.swift` | Draws the app icon; `build.sh` pipes it through `iconutil` |
 | `Log.swift` | Append-only log; an agent app has no console to fail loudly in |
 | `SelfTest.swift` | `MRTAB_RENDER=x.png` renders the list offscreen, no permissions needed |
 

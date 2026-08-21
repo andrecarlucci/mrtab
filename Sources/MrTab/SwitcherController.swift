@@ -8,7 +8,7 @@ import Carbon.HIToolbox
 /// The show path is deliberately trivial — read an array the store already published, hand it to
 /// the view, order the panel front. No Accessibility calls, no allocation of windows or views.
 final class SwitcherController {
-    private let config: Config
+    private var config: Config
     private let store: WindowStore
     private let panel: SwitcherPanel
 
@@ -18,6 +18,9 @@ final class SwitcherController {
 
     /// Tracks Shift across flag changes so a press can be told from a release.
     private var shiftWasDown = false
+
+    /// Raised when the gear in the panel header is clicked.
+    var onOpenSettings: (() -> Void)?
 
     private var localMonitor: Any?
     private var globalMonitor: Any?
@@ -35,6 +38,18 @@ final class SwitcherController {
             self?.panel.switcherView.select(index)
             self?.commit()
         }
+        panel.switcherView.onSettings = { [weak self] in
+            // Dismiss without switching, and without handing focus back to the previous app --
+            // the settings window is about to take it.
+            self?.hide()
+            self?.onOpenSettings?()
+        }
+    }
+
+    /// Adopts settings changed while the app is running.
+    func apply(config: Config) {
+        self.config = config
+        panel.apply(config: config)
     }
 
     func prewarm() {
@@ -100,7 +115,7 @@ final class SwitcherController {
         // Backstop for the case where the panel never becomes key: a global monitor cannot
         // consume events, but it can still tell us the modifier came up.
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
-            guard let self, !event.modifierFlags.contains(self.config.cocoaModifier) else { return }
+            guard let self, self.config.shortcut.isReleased(in: event.modifierFlags) else { return }
             self.commit()
         }
 
@@ -108,7 +123,7 @@ final class SwitcherController {
         // faster than the panel comes up; polling the live modifier state cannot be.
         let timer = Timer(timeInterval: 0.016, repeats: true) { [weak self] _ in
             guard let self, self.isVisible else { return }
-            if !NSEvent.modifierFlags.contains(self.config.cocoaModifier) {
+            if self.config.shortcut.isReleased(in: NSEvent.modifierFlags) {
                 self.commit()
             }
         }
@@ -130,14 +145,14 @@ final class SwitcherController {
         guard isVisible else { return false }
 
         if event.type == .flagsChanged {
-            if !event.modifierFlags.contains(config.cocoaModifier) {
+            if config.shortcut.isReleased(in: event.modifierFlags) {
                 commit()
                 return true
             }
             // Backwards is a Shift press while the browse modifier is held — not a second hot
             // key. Tapping Shift repeatedly walks back up the list. Skipped when Shift *is* the
             // browse modifier, where the two meanings would collide.
-            if config.cocoaModifier != .shift {
+            if config.shortcut.canUseShiftToGoBack {
                 let shiftDown = event.modifierFlags.contains(.shift)
                 if shiftDown && !shiftWasDown { step(by: -1) }
                 shiftWasDown = shiftDown
