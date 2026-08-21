@@ -80,6 +80,12 @@ jobs:
           MD
           sed -i '' "s|TAG|$VERSION|g" notes.md
 
-          gh release create "v$VERSION" build/MrTab-*.tar.gz \
+          # A second, unversioned copy so releases/latest/download/MrTab.tar.gz is a stable URL.
+          # That endpoint resolves by exact asset name, so a versioned name alone would 404.
+          cp build/MrTab-"$VERSION".tar.gz build/MrTab.tar.gz
+
+          gh release create "v$VERSION" \
+            build/MrTab-"$VERSION".tar.gz \
+            build/MrTab.tar.gz \
             --title "MrTab $VERSION" \
             --notes-file notes.md
