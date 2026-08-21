@@ -13,6 +13,8 @@ final class SwitcherPanel: NSPanel {
 
     let switcherView = SwitcherView()
 
+    private var screenChoice: PanelScreen = .active
+
     private let visualEffect = NSVisualEffectView()
     private let cornerRadius: CGFloat = 14
 
@@ -21,6 +23,8 @@ final class SwitcherPanel: NSPanel {
                    styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered,
                    defer: false)
+
+        screenChoice = config.panelScreen
 
         isFloatingPanel = true
         // Above full-screen apps and the Dock, but below system alerts.
@@ -67,6 +71,7 @@ final class SwitcherPanel: NSPanel {
 
     /// Applies settings changed while the app is running.
     func apply(config: Config) {
+        screenChoice = config.panelScreen
         switcherView.configure(rowHeight: config.rowHeight, maxVisibleRows: config.maxVisibleRows)
     }
 
@@ -83,10 +88,10 @@ final class SwitcherPanel: NSPanel {
         switcherView.setRows([], selected: 0)
     }
 
-    /// Sizes to the current row count and centres on the screen holding the pointer.
+    /// Sizes to the current row count and centres on the display the settings ask for.
     func positionForDisplay(width: CGFloat) {
         let height = switcherView.contentHeight
-        let screen = Self.activeScreen()
+        let screen = Self.screen(for: screenChoice)
         let visible = screen.visibleFrame
         let clampedWidth = min(width, visible.width - 40)
         let clampedHeight = min(height, visible.height - 40)
@@ -97,10 +102,17 @@ final class SwitcherPanel: NSPanel {
                  display: false)
     }
 
-    private static func activeScreen() -> NSScreen {
-        let mouse = NSEvent.mouseLocation
-        return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
-            ?? NSScreen.main
-            ?? NSScreen.screens[0]
+    private static func screen(for choice: PanelScreen) -> NSScreen {
+        switch choice {
+        case .active:
+            let mouse = NSEvent.mouseLocation
+            return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+                ?? NSScreen.main
+                ?? NSScreen.screens[0]
+        case .main:
+            // `NSScreen.main` is the screen with the *key window*, not the primary display, so it
+            // is the wrong thing here. The menu bar lives on `screens[0]`.
+            return NSScreen.screens.first ?? NSScreen.main ?? NSScreen.screens[0]
+        }
     }
 }

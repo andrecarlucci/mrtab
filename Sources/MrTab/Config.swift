@@ -4,6 +4,23 @@ import Foundation
 /// User settings, read at launch from ~/.config/mrtab/config.json and rewritten whenever the
 /// settings window changes something. Every field has a working default, so a missing or
 /// malformed file is not an error.
+/// Which display the switcher opens on.
+enum PanelScreen: String {
+    /// Whichever display the pointer is on when the shortcut fires.
+    case active
+    /// The display carrying the menu bar, wherever the pointer happens to be.
+    case main
+
+    var title: String {
+        switch self {
+        case .active: return "Screen with the pointer"
+        case .main: return "Main screen"
+        }
+    }
+
+    static let ordered: [PanelScreen] = [.active, .main]
+}
+
 struct Config: Equatable {
     var shortcut: Shortcut = .default
 
@@ -12,6 +29,7 @@ struct Config: Equatable {
     /// When false, only windows on the currently visible Space are listed.
     var showAllSpaces = true
 
+    var panelScreen: PanelScreen = .active
     var panelWidth: CGFloat = 620
     var rowHeight: CGFloat = 36
     var maxVisibleRows = 12
@@ -38,6 +56,9 @@ struct Config: Equatable {
         if let value = json["includeMinimized"] as? Bool { config.includeMinimized = value }
         if let value = json["includeHidden"] as? Bool { config.includeHidden = value }
         if let value = json["showAllSpaces"] as? Bool { config.showAllSpaces = value }
+        if let raw = json["panelScreen"] as? String, let value = PanelScreen(rawValue: raw) {
+            config.panelScreen = value
+        }
         if let value = json["panelWidth"] as? Double { config.panelWidth = CGFloat(value) }
         if let value = json["rowHeight"] as? Double { config.rowHeight = CGFloat(value) }
         if let value = json["maxVisibleRows"] as? Int { config.maxVisibleRows = max(1, value) }
@@ -51,6 +72,7 @@ struct Config: Equatable {
             "includeMinimized": includeMinimized,
             "includeHidden": includeHidden,
             "showAllSpaces": showAllSpaces,
+            "panelScreen": panelScreen.rawValue,
             "panelWidth": Double(panelWidth),
             "rowHeight": Double(rowHeight),
             "maxVisibleRows": maxVisibleRows,

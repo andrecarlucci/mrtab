@@ -11,6 +11,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private var hiddenBox: NSButton!
     private var spacesBox: NSButton!
     private var loginBox: NSButton!
+    private var screenPopup: NSPopUpButton!
     private var widthSlider: NSSlider!
     private var widthLabel: NSTextField!
     private var heightSlider: NSSlider!
@@ -104,6 +105,10 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
                              #selector(toggleSpaces))
         loginBox = checkbox("Open MrTab at login", LoginItem.isEnabled, #selector(toggleLogin))
 
+        screenPopup = popup(PanelScreen.ordered.map(\.title),
+                           selected: PanelScreen.ordered.firstIndex(of: config.panelScreen) ?? 0,
+                           #selector(changeScreen))
+
         (widthSlider, widthLabel) = slider(Config.panelWidthRange, Double(config.panelWidth),
                                            #selector(changeWidth), suffix: " pt")
         (heightSlider, heightLabel) = slider(Config.rowHeightRange, Double(config.rowHeight),
@@ -131,6 +136,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             ]),
             section("Windows to list", [minimizedBox, hiddenBox, spacesBox]),
             section("Appearance", [
+                labelled("Show on", screenPopup),
+                hint("With more than one display, choose whether the switcher follows the pointer "
+                     + "or always opens on the display with the menu bar."),
                 labelled("Panel width", pair(widthSlider, widthLabel)),
                 labelled("Row height", pair(heightSlider, heightLabel)),
                 labelled("Visible rows", pair(rowsSlider, rowsLabel)),
@@ -247,6 +255,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         return button
     }
 
+    private func popup(_ titles: [String], selected: Int, _ action: Selector) -> NSPopUpButton {
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        button.addItems(withTitles: titles)
+        button.selectItem(at: selected)
+        button.target = self
+        button.action = action
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.widthAnchor.constraint(equalToConstant: 220).isActive = true
+        return button
+    }
+
     private func slider(_ range: ClosedRange<Double>, _ value: Double, _ action: Selector,
                         suffix: String, integral: Bool = false) -> (NSSlider, NSTextField) {
         let slider = NSSlider(value: value, minValue: range.lowerBound, maxValue: range.upperBound,
@@ -288,6 +307,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
+    @objc private func changeScreen() {
+        let index = screenPopup.indexOfSelectedItem
+        guard PanelScreen.ordered.indices.contains(index) else { return }
+        update { $0.panelScreen = PanelScreen.ordered[index] }
+    }
+
     @objc private func changeWidth() {
         let value = widthSlider.doubleValue.rounded()
         widthLabel.stringValue = "\(Int(value)) pt"
@@ -317,6 +342,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         minimizedBox.state = config.includeMinimized ? .on : .off
         hiddenBox.state = config.includeHidden ? .on : .off
         spacesBox.state = config.showAllSpaces ? .on : .off
+        screenPopup.selectItem(at: PanelScreen.ordered.firstIndex(of: config.panelScreen) ?? 0)
         loginBox.state = LoginItem.isEnabled ? .on : .off
     }
 }

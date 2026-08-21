@@ -100,6 +100,11 @@ include ⌘, ⌥ or ⌃: the modifier is not decoration, it is what holds the sw
 browse. Shift alone will not do, because Shift already means "step backwards". Esc leaves the
 field unchanged.
 
+**Show on** decides which display the switcher opens on when you have more than one. *Screen with
+the pointer* is the default and follows your mouse; *Main screen* pins it to the display carrying
+the menu bar, so it always appears in the same place no matter where the pointer wandered off to.
+On a single display the two are the same thing.
+
 **Open at Login** is also a toggle on the menu bar item. It uses `SMAppService`, which registers
 the bundle at its current path — move MrTab and you need to switch it off and on again.
 
@@ -119,6 +124,7 @@ restart MrTab to apply.
 | `includeMinimized` | `true` | List minimized windows |
 | `includeHidden` | `true` | List windows of hidden apps |
 | `showAllSpaces` | `true` | When `false`, only windows on the current Space |
+| `panelScreen` | `"active"` | `"active"` follows the pointer, `"main"` pins to the menu-bar display |
 | `panelWidth` | `620` | Panel width in points |
 | `rowHeight` | `36` | Row height in points |
 | `maxVisibleRows` | `12` | Rows shown before the list scrolls |
