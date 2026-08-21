@@ -44,10 +44,15 @@ already sitting in memory and calls `orderFront` on a window that already exists
 Requires the Xcode command line tools. No Xcode project, no dependencies.
 
 ```sh
-./build.sh          # produces build/MrTab.app
-./build.sh --run    # build, then launch it
-./build.sh --debug  # unoptimised build
+./build.sh              # produces build/MrTab.app
+./build.sh --run        # build, then launch it
+./build.sh --debug      # unoptimised build
+./build.sh --universal  # fat binary for both Apple Silicon and Intel
 ```
+
+A plain build targets only the machine that built it. `--universal` cross-compiles both slices and
+`lipo`s them together; it needs nothing beyond the command line tools, since it spells out the
+target triples rather than using `swift build --arch`, which would require a full Xcode install.
 
 ## First run
 
@@ -92,6 +97,41 @@ which is enough to tell "not trusted", "shortcut taken by another app" and "no w
 ```sh
 tail -f ~/Library/Logs/MrTab.log
 ```
+
+## Running it on another Mac
+
+Building from source there is the least friction, because it settles architecture, signing and
+Gatekeeper in one go:
+
+```sh
+xcode-select --install    # if the command line tools are missing
+git clone https://github.com/andrecarlucci/mrtab.git
+cd mrtab
+./build.sh --run
+```
+
+Then grant Accessibility as above. macOS 13 or later.
+
+To copy the built app across instead, build it for both architectures first — otherwise it will
+not launch on a Mac with a different chip:
+
+```sh
+./build.sh --universal
+```
+
+Move `build/MrTab.app` over, then **clear the quarantine flag on the receiving Mac**:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/MrTab.app
+```
+
+Without that it will not open. The app is ad-hoc signed and not notarised, so anything arriving by
+AirDrop, download or shared folder is quarantined on landing, and Gatekeeper blocks it. The message
+macOS shows is misleading — "damaged and can't be opened" means unsigned by a known developer, not
+corrupt.
+
+Nothing else travels with the app: `~/.config/mrtab/config.json` and `~/Library/Logs/MrTab.log` are
+per-machine, and Accessibility has to be granted separately on each Mac.
 
 ## Configuration
 
