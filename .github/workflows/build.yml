@@ -19,7 +19,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Toolchain
         run: |
@@ -47,7 +47,7 @@ jobs:
           test -f build/MrTab.app/Contents/Resources/AppIcon.icns
           /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" build/MrTab.app/Contents/Info.plist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: MrTab-${{ steps.version.outputs.value }}
           path: build/MrTab-*.tar.gz

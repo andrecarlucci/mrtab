@@ -103,6 +103,22 @@ which is enough to tell "not trusted", "shortcut taken by another app" and "no w
 tail -f ~/Library/Logs/MrTab.log
 ```
 
+## Releases
+
+Every push to `main` builds on a GitHub Actions macOS runner and publishes a universal bundle as
+`v0.1.<run number>`. Installing the latest release:
+
+```sh
+curl -L https://github.com/andrecarlucci/mrtab/releases/latest/download/MrTab.tar.gz | tar -xz -C /Applications
+open /Applications/MrTab.app
+```
+
+CI builds the real artefact rather than a reduced one — macOS runners ship the whole toolchain, and
+ad-hoc signing needs no keychain or secrets. What it cannot do is notarise, which needs the paid
+Developer ID certificate, or exercise the hotkey path, which needs an Accessibility grant no runner
+can give. So the verify step checks what is checkable: both architectures present, signature valid,
+icon present, version stamped.
+
 ## Running it on another Mac
 
 Building from source there is the least friction, because it settles architecture, signing and
