@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>mrtab</string>
+    <key>CFBundleDisplayName</key>
+    <string>mrtab</string>
+    <key>CFBundleExecutable</key>
+    <string>mrtab</string>
+    <key>CFBundleIdentifier</key>
+    <string>dev.mrtab.app</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <!-- Agent app: no Dock icon, no menu bar. It lives in the status bar. -->
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>mrtab needs Accessibility access to list your open windows and bring one to the front.</string>
+</dict>
+</plist>
