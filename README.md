@@ -103,6 +103,15 @@ which is enough to tell "not trusted", "shortcut taken by another app" and "no w
 tail -f ~/Library/Logs/MrTab.log
 ```
 
+Each line is tagged with the process id, which matters because **two copies of MrTab cannot coexist**.
+A build in the repo and a copy in `/Applications` share a bundle identifier, so they compete for the
+same Accessibility grant and the same hot key. The failure is quiet and confusing: the older instance
+keeps the hot key, but granting access to the newer one revokes the older one's, so the switcher
+still opens and shows almost nothing.
+
+MrTab now terminates any earlier instance on launch, so the most recently opened copy wins. If you
+suspect a leftover, `pgrep -xl MrTab` should print exactly one line.
+
 ## Releases
 
 Every push to `main` builds on a GitHub Actions macOS runner and publishes a universal bundle as

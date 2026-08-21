@@ -16,8 +16,10 @@ enum Log {
         return formatter
     }()
 
+    private static let pid = ProcessInfo.processInfo.processIdentifier
+
     static func write(_ message: String) {
-        let line = "\(formatter.string(from: Date())) \(message)\n"
+        let line = "\(formatter.string(from: Date())) [\(pid)] \(message)\n"
         queue.async {
             guard let data = line.data(using: .utf8) else { return }
             if let handle = try? FileHandle(forWritingTo: url) {

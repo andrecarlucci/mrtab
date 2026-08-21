@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
+        terminateOtherInstances()
         config.writeIfMissing()
 
         store = WindowStore(config: config)
@@ -59,6 +60,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         hotKeys.unregister()
+    }
+
+    /// Two copies of MrTab -- typically a build in the repo and one in /Applications -- share a
+    /// bundle identifier, so they compete for the same Accessibility grant and the same hot key.
+    /// The symptom is not obvious: the older instance keeps the hot key but silently loses its
+    /// window list to the newer one's grant. The most recently launched copy wins instead.
+    private func terminateOtherInstances() {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return }
+        let mine = ProcessInfo.processInfo.processIdentifier
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            .filter { $0.processIdentifier != mine && !$0.isTerminated }
+
+        for other in others {
+            Log.write("replacing earlier instance pid=\(other.processIdentifier) "
+                      + "at \(other.bundleURL?.path ?? "unknown")")
+            other.terminate()
+        }
     }
 
     // MARK: - Configuration
