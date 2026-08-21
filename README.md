@@ -30,8 +30,36 @@ icon.
 > **Unpack with `tar` as above** rather than double-clicking a downloaded archive. MrTab is ad-hoc
 > signed rather than notarised, and Archive Utility stamps whatever it extracts with
 > `com.apple.quarantine`, which Gatekeeper then blocks — reporting it as *"damaged and can't be
-> opened"*, which means unsigned, not corrupt. `tar` does not propagate the flag. If you end up
-> with a blocked copy: `xattr -dr com.apple.quarantine /Applications/MrTab.app`.
+> opened"*, which means unsigned, not corrupt. `tar` does not propagate the flag.
+
+### If macOS blocks it
+
+If you already have a blocked copy — it arrived by AirDrop, or you double-clicked the archive —
+there are two ways out. Neither requires re-downloading anything.
+
+**Clear the flag from a terminal.** One command, and the app opens normally afterwards:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/MrTab.app
+```
+
+**Or use Gatekeeper's own override**, if you would rather not touch a terminal. On **macOS 15 and
+later**:
+
+1. Double-click MrTab so it gets blocked. This step is required — the override only appears *after*
+   a refused launch, and it expires roughly an hour later.
+2. Open **System Settings → Privacy & Security** and scroll down to the **Security** section.
+3. You will see *"MrTab was blocked to protect your Mac."* Click **Open Anyway** and authenticate.
+4. Open MrTab again. Confirm **Open** in the dialog that follows.
+
+On **macOS 13 and 14** you can instead Control-click MrTab in Finder, choose **Open**, then **Open**
+again in the dialog. That shortcut was removed in macOS 15, so on newer systems use the Settings
+route above.
+
+Two things worth knowing either way. The override applies to *that exact copy* — replace MrTab with
+a newer download and you do it again, which is why the `curl … | tar` install is the quieter path.
+And this only settles Gatekeeper: **Accessibility is a separate permission** and still has to be
+granted as described above.
 
 ### Accessibility is not optional
 
@@ -204,6 +232,9 @@ decides whether Gatekeeper objects:
 | AirDrop, browser download, Mail, Messages | **Yes** |
 | Double-clicking a downloaded archive | **Yes** |
 
+A **Yes** is not fatal — see [If macOS blocks it](#if-macos-blocks-it) for the two ways to open a
+quarantined copy.
+
 Nothing else travels with the app: `~/.config/mrtab/config.json` and `~/Library/Logs/MrTab.log` are
 per-machine, and Accessibility has to be granted separately on each Mac.
 
@@ -271,5 +302,6 @@ vibrancy material and the dynamic text colours can never disagree about which of
 - No type-to-filter.
 - `⌘ Tab` cannot be replaced (see [Configuration](#configuration)).
 - Windows on other Spaces are listed by default; switching to one moves you to that Space.
-- Not notarised, so a downloaded copy needs `tar` or `xattr` as described above. Notarisation
-  requires the paid Apple Developer Program; there is no free route to it.
+- Not notarised, so a downloaded copy needs `tar`, `xattr`, or Gatekeeper's **Open Anyway**
+  override — see [If macOS blocks it](#if-macos-blocks-it). Notarisation requires the paid Apple
+  Developer Program; there is no free route to it.
