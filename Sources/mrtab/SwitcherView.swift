@@ -3,8 +3,9 @@ import AppKit
 /// The switcher list, drawn by hand.
 ///
 /// A single custom-drawn view is used instead of `NSTableView`/`NSCollectionView`/SwiftUI because
-/// those all build and lay out a view tree on first display. Here, showing the panel is a `setNeedsDisplay`
-/// and one `draw(_:)` over at most a dozen rows, with the strings and icons already prepared.
+/// those all build and lay out a view tree on first display. Here, showing the panel is a
+/// `setNeedsDisplay` and one `draw(_:)` over at most a dozen rows, with the strings and icons
+/// already prepared.
 final class SwitcherView: NSView {
     struct Row {
         let appName: String
@@ -23,11 +24,21 @@ final class SwitcherView: NSView {
 
     private var rowHeight: CGFloat = 36
     private var maxVisibleRows = 12
-    private var attributedRows: [NSAttributedString] = []
+
+    /// App names and window titles are laid out as two columns, so the strings are kept apart
+    /// rather than concatenated.
+    private var appStrings: [NSAttributedString] = []
+    private var titleStrings: [NSAttributedString] = []
+    private var widestAppName: CGFloat = 0
 
     private let padding: CGFloat = 8
     private let iconSide: CGFloat = 26
     private let rowInset: CGFloat = 6
+    private let iconGap: CGFloat = 10
+    private let columnGap: CGFloat = 14
+    /// The app name column never takes more than this share of the panel, however long the
+    /// longest name is, so the titles always get room.
+    private let maxColumnShare: CGFloat = 0.40
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -42,7 +53,10 @@ final class SwitcherView: NSView {
     func setRows(_ rows: [Row], selected: Int) {
         self.rows = rows
         self.selectedIndex = rows.isEmpty ? 0 : min(max(0, selected), rows.count - 1)
-        self.attributedRows = rows.map(Self.makeAttributedString)
+        self.appStrings = rows.map { Self.appString(for: $0) }
+        self.titleStrings = rows.map { Self.titleString(for: $0) }
+        // Measuring once here keeps the per-row draw free of text metrics.
+        self.widestAppName = appStrings.reduce(0) { max($0, $1.size().width) }
         self.scrollOffset = 0
         clampScroll()
         needsDisplay = true
@@ -59,8 +73,7 @@ final class SwitcherView: NSView {
 
     /// Height the panel needs for the current rows.
     var contentHeight: CGFloat {
-        let visible = max(1, min(rows.count, maxVisibleRows))
-        return CGFloat(visible) * rowHeight + padding * 2
+        CGFloat(visibleRowCount) * rowHeight + padding * 2
     }
 
     var visibleRowCount: Int { max(1, min(rows.count, maxVisibleRows)) }
@@ -75,42 +88,49 @@ final class SwitcherView: NSView {
         scrollOffset = max(0, min(scrollOffset, max(0, rows.count - visible)))
     }
 
-    // MARK: - Drawing
+    /// Width reserved for app names. Every window title starts at the same x as a result — an
+    /// invisible column, with no rule or separator drawn between the two.
+    private var appColumnWidth: CGFloat {
+        min(widestAppName, bounds.width * maxColumnShare)
+    }
 
-    private static func makeAttributedString(for row: Row) -> NSAttributedString {
+    // MARK: - Strings
+
+    private static func paragraphStyle() -> NSParagraphStyle {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byTruncatingTail
-
-        let result = NSMutableAttributedString(
-            string: row.appName,
-            attributes: [
-                .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-                .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paragraph,
-            ])
-
-        if !row.title.isEmpty && row.title != row.appName {
-            // Only the separator is dimmed. The window title is the thing you are actually
-            // scanning for, so it is drawn at full strength like the app name -- the two are
-            // told apart by weight. Dimming it made it legible only on the selected row, whose
-            // solid accent fill happens to guarantee contrast.
-            result.append(NSAttributedString(
-                string: "  \u{2014}  ",
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: 13, weight: .regular),
-                    .foregroundColor: NSColor.secondaryLabelColor,
-                    .paragraphStyle: paragraph,
-                ]))
-            result.append(NSAttributedString(
-                string: row.title,
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: 13, weight: .regular),
-                    .foregroundColor: NSColor.labelColor,
-                    .paragraphStyle: paragraph,
-                ]))
-        }
-        return result
+        return paragraph
     }
+
+    private static func appString(for row: Row) -> NSAttributedString {
+        NSAttributedString(string: row.appName, attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
+            .foregroundColor: NSColor.labelColor,
+            .paragraphStyle: paragraphStyle(),
+        ])
+    }
+
+    private static func titleString(for row: Row) -> NSAttributedString {
+        guard !row.title.isEmpty, row.title != row.appName else { return NSAttributedString() }
+        // Full strength, like the app name. The two are told apart by weight and by column, not
+        // by opacity: dimming the title made it legible only on the selected row.
+        return NSAttributedString(string: row.title, attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: .regular),
+            .foregroundColor: NSColor.labelColor,
+            .paragraphStyle: paragraphStyle(),
+        ])
+    }
+
+    /// On the accent-filled selected row the dynamic label colours lose contrast.
+    private static func whitened(_ string: NSAttributedString) -> NSAttributedString {
+        guard string.length > 0 else { return string }
+        let mutable = NSMutableAttributedString(attributedString: string)
+        mutable.addAttribute(.foregroundColor, value: NSColor.white,
+                             range: NSRange(location: 0, length: mutable.length))
+        return mutable
+    }
+
+    // MARK: - Drawing
 
     override func draw(_ dirtyRect: NSRect) {
         // The panel is translucent, so without this the legibility of every row would depend on
@@ -125,52 +145,49 @@ final class SwitcherView: NSView {
 
         let visible = visibleRowCount
         let upperBound = min(rows.count, scrollOffset + visible)
+        let columnWidth = appColumnWidth
 
         for index in scrollOffset..<upperBound {
             let y = padding + CGFloat(index - scrollOffset) * rowHeight
             let rowRect = NSRect(x: rowInset, y: y, width: bounds.width - rowInset * 2, height: rowHeight)
-            draw(row: rows[index], text: attributedRows[index],
-                 in: rowRect, selected: index == selectedIndex)
+            draw(row: rows[index], app: appStrings[index], title: titleStrings[index],
+                 in: rowRect, columnWidth: columnWidth, selected: index == selectedIndex)
         }
 
         drawScrollIndicators(visible: visible)
     }
 
-    private func draw(row: Row, text: NSAttributedString, in rect: NSRect, selected: Bool) {
+    private func draw(row: Row, app: NSAttributedString, title: NSAttributedString,
+                      in rect: NSRect, columnWidth: CGFloat, selected: Bool) {
         if selected {
             NSColor.controlAccentColor.withAlphaComponent(0.85).setFill()
             NSBezierPath(roundedRect: rect.insetBy(dx: 0, dy: 2), xRadius: 8, yRadius: 8).fill()
         }
 
-        let iconRect = NSRect(x: rect.minX + 10,
+        let iconRect = NSRect(x: rect.minX + iconGap,
                               y: rect.midY - iconSide / 2,
                               width: iconSide, height: iconSide)
-        let icon = IconCache.shared.icon(for: row.pid)
-        icon?.draw(in: iconRect, from: .zero, operation: .sourceOver,
-                   fraction: row.isMinimized || row.isAppHidden ? 0.55 : 1.0)
+        IconCache.shared.icon(for: row.pid)?.draw(
+            in: iconRect, from: .zero, operation: .sourceOver,
+            fraction: row.isMinimized || row.isAppHidden ? 0.55 : 1.0)
 
         var badgeWidth: CGFloat = 0
         if let badge = badgeText(for: row) {
             badgeWidth = drawBadge(badge, in: rect, selected: selected)
         }
 
-        let textX = iconRect.maxX + 10
-        let textRect = NSRect(x: textX,
-                              y: rect.midY - 9,
-                              width: max(0, rect.maxX - textX - 10 - badgeWidth),
-                              height: 18)
+        let textTop = rect.midY - 9
+        let appRect = NSRect(x: iconRect.maxX + iconGap, y: textTop, width: columnWidth, height: 18)
+        (selected ? Self.whitened(app) : app)
+            .draw(with: appRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
 
-        // On the accent-filled selected row the default label colours lose contrast.
-        let drawable: NSAttributedString
-        if selected {
-            let mutable = NSMutableAttributedString(attributedString: text)
-            mutable.addAttribute(.foregroundColor, value: NSColor.white,
-                                 range: NSRange(location: 0, length: mutable.length))
-            drawable = mutable
-        } else {
-            drawable = text
-        }
-        drawable.draw(with: textRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+        guard title.length > 0 else { return }
+        let titleX = appRect.maxX + columnGap
+        let titleRect = NSRect(x: titleX, y: textTop,
+                               width: max(0, rect.maxX - titleX - iconGap - badgeWidth),
+                               height: 18)
+        (selected ? Self.whitened(title) : title)
+            .draw(with: titleRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
     }
 
     private func badgeText(for row: Row) -> String? {
@@ -181,14 +198,13 @@ final class SwitcherView: NSView {
 
     @discardableResult
     private func drawBadge(_ text: String, in rect: NSRect, selected: Bool) -> CGFloat {
-        let attributes: [NSAttributedString.Key: Any] = [
+        let string = NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),
-            .foregroundColor: selected ? NSColor.white.withAlphaComponent(0.85) : NSColor.secondaryLabelColor,
-        ]
-        let string = NSAttributedString(string: text, attributes: attributes)
+            .foregroundColor: selected ? NSColor.white.withAlphaComponent(0.85)
+                                       : NSColor.secondaryLabelColor,
+        ])
         let size = string.size()
-        let origin = NSPoint(x: rect.maxX - 10 - size.width, y: rect.midY - size.height / 2)
-        string.draw(at: origin)
+        string.draw(at: NSPoint(x: rect.maxX - iconGap - size.width, y: rect.midY - size.height / 2))
         return size.width + 12
     }
 
