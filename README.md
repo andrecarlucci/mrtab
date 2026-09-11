@@ -1,7 +1,8 @@
 # MrTab
 
 A window switcher for macOS, in the spirit of [AltTab](https://github.com/lwouis/alt-tab-macos).
-It lists every open window — not every app — and switches to the one you pick.
+It lists every open window — not every app — and switches to the one you pick, either by stepping
+through the list or by typing a few letters of the app or title you are after.
 
 The single design goal is that **pressing the shortcut shows the list instantly**. Most of what
 follows is a consequence of that.
@@ -74,9 +75,11 @@ banner before assuming anything else is wrong.
 ⌥ held     tap Tab to move down the list, tap ⇧ to move back up
            the arrow keys work too
 ⌥ release  switch to the highlighted window
-Esc        cancel and stay where you are
+a-z, 0-9   filter the list down to what you type
+⌫          delete a character of the filter
+Esc        clear the filter, or cancel and stay where you are
 Return     switch immediately
-W          close the highlighted window
+⌘ W        close the highlighted window
 ```
 
 The shortcut is whatever you set it to; `⌥ Tab` is only the default.
@@ -85,6 +88,22 @@ The shortcut is whatever you set it to; `⌥ Tab` is only the default.
 
 The panel has a header carrying the app icon, its name, and a gear on the far right. Clicking the
 gear dismisses the switcher and opens Settings.
+
+### Typing to filter
+
+Start typing and the list narrows to the windows whose app name or title matches, with the header
+showing what you have typed so far. Words match in any order, so `sl gen` finds Slack's #general
+and `code mrtab` picks one editor window out of six. Case and accents are ignored: `sessao` finds
+*Sessão*.
+
+**The first keystroke pins the panel open.** Letting go of ⌥ stops meaning *switch now* — searching
+is a two-handed, unhurried act, and holding a modifier through it is not. Move with Tab or the
+arrows, then Return or a click to switch. Esc clears the filter and leaves the switcher up; a
+second Esc cancels, as does clicking into another app. Nothing changes for the plain
+tap-and-release flow: it only ever becomes a search if you type.
+
+Closing a window takes **⌘ W** rather than a bare W for the same reason — W is the first letter of
+far too many app names to spend on a shortcut.
 
 ## Settings
 
@@ -156,6 +175,9 @@ already sitting in memory and calls `orderFront` on a window that already exists
 - **The list is drawn by hand.** One custom `NSView` drawing a dozen rows, rather than a table view
   or a SwiftUI hierarchy that would need building and laying out on first display.
 - **Icons are rasterised in advance.** Scaled once when a snapshot lands, cached by pid.
+- **Filtering is a pass over that same in-memory snapshot**, run on the main thread between
+  keystrokes. No Accessibility call, no index to maintain, and nothing to invalidate: a few dozen
+  string comparisons cost less than the redraw they trigger.
 - **Accessibility calls are timeout-capped at 250ms** and never run on the main thread, so an app
   that is beachballing cannot stall the switcher.
 
@@ -270,9 +292,10 @@ suspect a leftover, `pgrep -xl MrTab` should print exactly one line.
 | --- | --- |
 | `AppDelegate.swift` | Wiring, menu bar item, launch behaviour, single-instance guard |
 | `WindowStore.swift` | Background window tracking, AX observers, MRU ordering, snapshot publishing |
-| `SwitcherController.swift` | Show / step / commit / cancel, modifier-release detection |
+| `SwitcherController.swift` | Show / step / filter / commit / cancel, modifier-release detection |
 | `SwitcherPanel.swift` | The floating `NSPanel`, created once and pre-warmed |
 | `SwitcherView.swift` | Hand-drawn header and row rendering |
+| `WindowFilter.swift` | Matching the list against what the user typed |
 | `HotKey.swift` | Carbon `RegisterEventHotKey` registration |
 | `AXHelpers.swift` | Typed wrappers over the Accessibility C API |
 | `Permissions.swift` | Accessibility trust checks and polling |
@@ -288,8 +311,8 @@ suspect a leftover, `pgrep -xl MrTab` should print exactly one line.
 
 ### Checking the UI without running it
 
-`MRTAB_RENDER=/tmp/shot.png build/MrTab.app/Contents/MacOS/MrTab` writes the switcher and the
-settings pane to PNGs and exits. It needs no Accessibility and no Screen Recording, so it works in
+`MRTAB_RENDER=/tmp/shot.png build/MrTab.app/Contents/MacOS/MrTab` writes four PNGs and exits: the
+plain switcher, a filter with matches, a filter with none, and the settings pane. It needs no Accessibility and no Screen Recording, so it works in
 any context, and it is how the layout gets checked.
 
 The switcher is rendered over a stand-in for colourful wallpaper rather than a flat fill. A flat
@@ -305,7 +328,6 @@ vibrancy material and the dynamic text colours can never disagree about which of
 - No live window thumbnails. Icons and titles only — a deliberate choice, since thumbnails need
   Screen Recording permission and capture costs real time. `SwitcherView.Row` is the seam to add
   them behind.
-- No type-to-filter.
 - `⌘ Tab` cannot be replaced (see [Configuration](#configuration)).
 - Windows on other Spaces are listed by default; switching to one moves you to that Space.
 - Not notarised, so a downloaded copy needs `tar`, `xattr`, or Gatekeeper's **Open Anyway**

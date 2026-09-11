@@ -14,7 +14,17 @@ enum SelfTest {
         guard let path = ProcessInfo.processInfo.environment["MRTAB_RENDER"] else { return false }
         let base = URL(fileURLWithPath: path).deletingPathExtension().path
 
-        render(rows: makeRows(), config: config, to: "\(base).png")
+        let rows = makeRows()
+        render(rows: rows, config: config, to: "\(base).png")
+        // Typing rewrites the header and can empty the list, so both filtered states get the
+        // same offscreen check as the plain one.
+        let query = String(rows.first?.appName.prefix(3) ?? "Fin")
+        let tokens = WindowFilter.tokens(in: query)
+        let matching = rows.filter {
+            WindowFilter.matches(tokens: tokens, appName: $0.appName, title: $0.title)
+        }
+        render(rows: matching, query: query, config: config, to: "\(base)-filtered.png")
+        render(rows: [], query: "no such window", config: config, to: "\(base)-nomatch.png")
         renderSettings(config: config, to: "\(base)-settings.png")
         return true
     }
@@ -37,10 +47,12 @@ enum SelfTest {
             : rows
     }
 
-    private static func render(rows: [SwitcherView.Row], config: Config, to path: String) {
+    private static func render(rows: [SwitcherView.Row], query: String = "",
+                               config: Config, to path: String) {
         let view = SwitcherView()
         view.configure(rowHeight: config.rowHeight, maxVisibleRows: config.maxVisibleRows)
-        view.setRows(rows, selected: min(1, rows.count - 1))
+        view.setQuery(query)
+        view.setRows(rows, selected: max(0, min(1, rows.count - 1)))
         view.frame = NSRect(x: 0, y: 0, width: config.panelWidth, height: view.contentHeight)
 
         // Render over a stand-in for blurred wallpaper rather than a flat fill. Flat backdrops

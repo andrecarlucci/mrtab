@@ -21,6 +21,7 @@ final class SwitcherView: NSView {
 
     private(set) var rows: [Row] = []
     private(set) var selectedIndex = 0
+    private(set) var query = ""
     private var scrollOffset = 0
 
     private var rowHeight: CGFloat = 36
@@ -72,6 +73,14 @@ final class SwitcherView: NSView {
         self.widestAppName = appStrings.reduce(0) { max($0, $1.size().width) }
         self.scrollOffset = 0
         clampScroll()
+        needsDisplay = true
+    }
+
+    /// What the user has typed to filter the list. Drawn in the header; the filtering itself
+    /// happens in the controller, which hands down the rows that survived it.
+    func setQuery(_ query: String) {
+        guard query != self.query else { return }
+        self.query = query
         needsDisplay = true
     }
 
@@ -220,6 +229,9 @@ final class SwitcherView: NSView {
 
         gearRect = NSRect(x: bounds.width - 14 - gearSide, y: (headerHeight - gearSide) / 2,
                           width: gearSide, height: gearSide)
+
+        drawSearchField(from: textLeft + name.size().width + 14)
+
         if let gear = Self.gearIcon {
             // The whole header is the hit target's neighbourhood, so brightening on hover is the
             // only affordance telling you the gear is clickable.
@@ -231,8 +243,48 @@ final class SwitcherView: NSView {
         NSRect(x: 12, y: headerHeight - 1, width: bounds.width - 24, height: 1).fill()
     }
 
+    /// The typed filter, in the strip of header between the app name and the gear. There is no
+    /// text field: a real one would need focus, an insertion point and a first responder dance
+    /// for something the user can only ever type into. The prompt stands in for all of it, and
+    /// doubles as the hint that typing does anything at all.
+    private func drawSearchField(from left: CGFloat) {
+        let glassSide: CGFloat = 16
+        var x = left
+        if let glass = Self.searchIcon {
+            let rect = NSRect(x: x, y: (headerHeight - glassSide) / 2,
+                              width: glassSide, height: glassSide)
+            glass.draw(in: rect, from: .zero, operation: .sourceOver,
+                       fraction: query.isEmpty ? 0.5 : 0.95)
+            x = rect.maxX + 6
+        }
+
+        // A long query is truncated at the *head*, so the keystrokes just typed stay visible.
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = query.isEmpty ? .byTruncatingTail : .byTruncatingHead
+
+        let text = query.isEmpty ? "Type to filter" : query
+        let string = NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 13, weight: query.isEmpty ? .regular : .semibold),
+            .foregroundColor: query.isEmpty ? NSColor.white.withAlphaComponent(0.5)
+                                            : NSColor.white,
+            .paragraphStyle: paragraph,
+        ])
+        let width = gearRect.minX - 10 - x
+        guard width > 20 else { return }
+        let rect = NSRect(x: x, y: (headerHeight - 18) / 2, width: width, height: 18)
+        string.draw(with: rect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+    }
+
     /// Tinting is done once and cached: a template image has to be redrawn through a colour to
     /// take one, and that is not work for a draw path this hot.
+    private static let searchIcon: NSImage? = {
+        let configuration = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
+        guard let symbol = NSImage(systemSymbolName: "magnifyingglass",
+                                   accessibilityDescription: "Filter")?
+            .withSymbolConfiguration(configuration) else { return nil }
+        return symbol.tinted(with: .labelColor)
+    }()
+
     private static let gearIcon: NSImage? = {
         let configuration = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
         guard let symbol = NSImage(systemSymbolName: "gearshape",
@@ -284,7 +336,10 @@ final class SwitcherView: NSView {
     }
 
     private func drawEmptyState() {
-        let string = NSAttributedString(string: "No windows", attributes: [
+        // An empty list means two very different things depending on whether a filter is on, and
+        // "no windows" would be a lie about the machine when it is really a miss on the query.
+        let text = query.isEmpty ? "No windows" : "No window matches \u{201C}\(query)\u{201D}"
+        let string = NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .medium),
             .foregroundColor: NSColor.secondaryLabelColor,
         ])
@@ -319,6 +374,7 @@ final class SwitcherView: NSView {
             gearHovered = overGear
             needsDisplay = true
         }
+
         // Moving across the header must not drag the selection with it.
         guard point.y >= headerHeight, let index = rowIndex(at: point) else { return }
         onHover?(index)

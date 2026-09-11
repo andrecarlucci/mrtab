@@ -69,6 +69,15 @@ final class SwitcherPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
+    /// Raised when the panel loses key status. Only interesting once typing has pinned it open,
+    /// since otherwise the modifier coming up has already closed it.
+    var onResignKey: (() -> Void)?
+
+    override func resignKey() {
+        super.resignKey()
+        onResignKey?()
+    }
+
     /// Applies settings changed while the app is running.
     func apply(config: Config) {
         screenChoice = config.panelScreen
