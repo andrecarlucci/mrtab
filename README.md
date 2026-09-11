@@ -236,7 +236,7 @@ TCC then keys the grant on the certificate rather than the binary hash, so it su
 ## Releases
 
 Every push to `main` builds on a GitHub Actions macOS runner and publishes a universal bundle as
-`v0.1.<run number>`, with both a versioned tarball and an unversioned one so
+`v1.0.<run number>`, with both a versioned tarball and an unversioned one so
 `releases/latest/download/MrTab.tar.gz` is a stable URL.
 
 CI builds the real artefact rather than a reduced one — macOS runners ship the whole toolchain, and
