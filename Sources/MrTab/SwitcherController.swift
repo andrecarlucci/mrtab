@@ -45,6 +45,9 @@ final class SwitcherController {
             self?.panel.switcherView.select(index)
             self?.commit()
         }
+        panel.switcherView.onClose = { [weak self] index in
+            self?.closeWindow(at: index)
+        }
         panel.switcherView.onSettings = { [weak self] in
             // Dismiss without switching, and without handing focus back to the previous app --
             // the settings window is about to take it.
@@ -261,7 +264,7 @@ final class SwitcherController {
             backspace()
         case kVK_ANSI_W where event.modifierFlags.contains(.command):
             // Closing a window has to take ⌘ now that a bare W is the first letter of a search.
-            closeSelectedWindow()
+            closeWindow(at: panel.switcherView.selectedIndex)
         default:
             guard let text = typedText(from: event) else { return false }
             type(text)
@@ -322,8 +325,7 @@ final class SwitcherController {
         }
     }
 
-    private func closeSelectedWindow() {
-        let index = panel.switcherView.selectedIndex
+    private func closeWindow(at index: Int) {
         guard index < entries.count else { return }
         let entry = entries[index]
 

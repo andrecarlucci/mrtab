@@ -105,6 +105,14 @@ tap-and-release flow: it only ever becomes a search if you type.
 Closing a window takes **⌘ W** rather than a bare W for the same reason — W is the first letter of
 far too many app names to spend on a shortcut.
 
+### With the mouse
+
+Moving the pointer over a row highlights it and clicking switches to it. The row under the pointer
+also grows an **✕** at its right edge; clicking that closes *that* window and leaves the switcher
+up, so you can shut several in a row without reopening it. It is the same thing ⌘W does to the
+highlighted row, and it appears only under the pointer — an ✕ on all twelve rows at once is noise,
+and the space it needs is reserved on every row regardless, so nothing reflows as you move.
+
 ## Settings
 
 Reachable three ways: the gear in the panel header, **Settings…** (⌘,) on the menu bar item, or
@@ -294,7 +302,7 @@ suspect a leftover, `pgrep -xl MrTab` should print exactly one line.
 | `WindowStore.swift` | Background window tracking, AX observers, MRU ordering, snapshot publishing |
 | `SwitcherController.swift` | Show / step / filter / commit / cancel, modifier-release detection |
 | `SwitcherPanel.swift` | The floating `NSPanel`, created once and pre-warmed |
-| `SwitcherView.swift` | Hand-drawn header and row rendering |
+| `SwitcherView.swift` | Hand-drawn header and row rendering, hover and click hit testing |
 | `WindowFilter.swift` | Matching the list against what the user typed |
 | `HotKey.swift` | Carbon `RegisterEventHotKey` registration |
 | `AXHelpers.swift` | Typed wrappers over the Accessibility C API |
@@ -311,8 +319,9 @@ suspect a leftover, `pgrep -xl MrTab` should print exactly one line.
 
 ### Checking the UI without running it
 
-`MRTAB_RENDER=/tmp/shot.png build/MrTab.app/Contents/MacOS/MrTab` writes four PNGs and exits: the
-plain switcher, a filter with matches, a filter with none, and the settings pane. It needs no Accessibility and no Screen Recording, so it works in
+`MRTAB_RENDER=/tmp/shot.png build/MrTab.app/Contents/MacOS/MrTab` writes five PNGs and exits: the
+plain switcher, a filter with matches, a filter with none, a row hovered with its close button
+showing, and the settings pane. It needs no Accessibility and no Screen Recording, so it works in
 any context, and it is how the layout gets checked.
 
 The switcher is rendered over a stand-in for colourful wallpaper rather than a flat fill. A flat

@@ -17,6 +17,7 @@ final class SwitcherView: NSView {
 
     var onHover: ((Int) -> Void)?
     var onClick: ((Int) -> Void)?
+    var onClose: ((Int) -> Void)?
     var onSettings: (() -> Void)?
 
     private(set) var rows: [Row] = []
@@ -44,6 +45,7 @@ final class SwitcherView: NSView {
     private let maxColumnShare: CGFloat = 0.40
     private let headerHeight: CGFloat = 38
     private let gearSide: CGFloat = 16
+    private let closeSide: CGFloat = 16
 
     /// Left edge of the icon column, and of the text column beside it. The header uses these too,
     /// so the app icon and the word MrTab line up with the rows below rather than being placed
@@ -53,6 +55,11 @@ final class SwitcherView: NSView {
 
     private var gearRect: NSRect = .zero
     private var gearHovered = false
+
+    /// The row under the pointer, which is the only one showing its close button, and whether the
+    /// pointer is on that button rather than elsewhere in the row.
+    private var hoveredRow: Int?
+    private var closeHovered = false
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -73,6 +80,13 @@ final class SwitcherView: NSView {
         self.widestAppName = appStrings.reduce(0) { max($0, $1.size().width) }
         self.scrollOffset = 0
         clampScroll()
+        needsDisplay = true
+    }
+
+    /// Test seam: an offscreen render has no pointer, and the close button only shows under one.
+    func hoverRow(_ index: Int?) {
+        hoveredRow = index
+        closeHovered = false
         needsDisplay = true
     }
 
@@ -165,6 +179,11 @@ final class SwitcherView: NSView {
 
         drawHeader()
 
+        // Hover is settled here rather than on the mouse event that last moved it: closing a
+        // window or narrowing the filter rewrites the list and resizes the panel under a pointer
+        // that has not moved, and by draw time the geometry it has to be measured against is final.
+        refreshHover()
+
         guard !rows.isEmpty else {
             drawEmptyState()
             return
@@ -175,17 +194,16 @@ final class SwitcherView: NSView {
         let columnWidth = appColumnWidth
 
         for index in scrollOffset..<upperBound {
-            let y = rowsTop + CGFloat(index - scrollOffset) * rowHeight
-            let rowRect = NSRect(x: rowInset, y: y, width: bounds.width - rowInset * 2, height: rowHeight)
             draw(row: rows[index], app: appStrings[index], title: titleStrings[index],
-                 in: rowRect, columnWidth: columnWidth, selected: index == selectedIndex)
+                 in: rowRect(for: index), columnWidth: columnWidth,
+                 selected: index == selectedIndex, hovered: index == hoveredRow)
         }
 
         drawScrollIndicators(visible: visible)
     }
 
     private func draw(row: Row, app: NSAttributedString, title: NSAttributedString,
-                      in rect: NSRect, columnWidth: CGFloat, selected: Bool) {
+                      in rect: NSRect, columnWidth: CGFloat, selected: Bool, hovered: Bool) {
         if selected {
             NSColor.controlAccentColor.withAlphaComponent(0.85).setFill()
             NSBezierPath(roundedRect: rect.insetBy(dx: 0, dy: 2), xRadius: 8, yRadius: 8).fill()
@@ -197,9 +215,18 @@ final class SwitcherView: NSView {
             in: iconRect, from: .zero, operation: .sourceOver,
             fraction: row.isMinimized || row.isAppHidden ? 0.55 : 1.0)
 
+        // The close button's room is reserved on every row, hovered or not, so that text never
+        // reflows under the pointer.
+        let close = closeRect(in: rect)
+        if hovered, let cross = Self.closeIcon {
+            cross.draw(in: close, from: .zero, operation: .sourceOver,
+                       fraction: closeHovered ? 1.0 : 0.45)
+        }
+        let rightEdge = close.minX - 6
+
         var badgeWidth: CGFloat = 0
         if let badge = badgeText(for: row) {
-            badgeWidth = drawBadge(badge, in: rect, selected: selected)
+            badgeWidth = drawBadge(badge, rightEdge: rightEdge, in: rect, selected: selected)
         }
 
         let textTop = rect.midY - 9
@@ -210,10 +237,20 @@ final class SwitcherView: NSView {
         guard title.length > 0 else { return }
         let titleX = appRect.maxX + columnGap
         let titleRect = NSRect(x: titleX, y: textTop,
-                               width: max(0, rect.maxX - titleX - iconGap - badgeWidth),
+                               width: max(0, rightEdge - titleX - badgeWidth),
                                height: 18)
         (selected ? Self.whitened(title) : title)
             .draw(with: titleRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+    }
+
+    private func rowRect(for index: Int) -> NSRect {
+        NSRect(x: rowInset, y: rowsTop + CGFloat(index - scrollOffset) * rowHeight,
+               width: bounds.width - rowInset * 2, height: rowHeight)
+    }
+
+    private func closeRect(in rect: NSRect) -> NSRect {
+        NSRect(x: rect.maxX - iconGap - closeSide, y: rect.midY - closeSide / 2,
+               width: closeSide, height: closeSide)
     }
 
     private func drawHeader() {
@@ -293,6 +330,14 @@ final class SwitcherView: NSView {
         return symbol.tinted(with: .labelColor)
     }()
 
+    private static let closeIcon: NSImage? = {
+        let configuration = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)
+        guard let symbol = NSImage(systemSymbolName: "xmark",
+                                   accessibilityDescription: "Close this window")?
+            .withSymbolConfiguration(configuration) else { return nil }
+        return symbol.tinted(with: .labelColor)
+    }()
+
     private static let brandIcon: NSImage? = {
         guard let icon = NSApp.applicationIconImage else { return nil }
         let scaled = NSImage(size: NSSize(width: iconSide, height: iconSide))
@@ -309,15 +354,18 @@ final class SwitcherView: NSView {
         return nil
     }
 
+    /// Draws the badge with its right edge at `rightEdge`, and returns the width it claims,
+    /// padding included, so the window title can be given what is left.
     @discardableResult
-    private func drawBadge(_ text: String, in rect: NSRect, selected: Bool) -> CGFloat {
+    private func drawBadge(_ text: String, rightEdge: CGFloat, in rect: NSRect,
+                           selected: Bool) -> CGFloat {
         let string = NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),
             .foregroundColor: selected ? NSColor.white.withAlphaComponent(0.85)
                                        : NSColor.secondaryLabelColor,
         ])
         let size = string.size()
-        string.draw(at: NSPoint(x: rect.maxX - iconGap - size.width, y: rect.midY - size.height / 2))
+        string.draw(at: NSPoint(x: rightEdge - size.width, y: rect.midY - size.height / 2))
         return size.width + 12
     }
 
@@ -354,7 +402,8 @@ final class SwitcherView: NSView {
         super.updateTrackingAreas()
         for area in trackingAreas { removeTrackingArea(area) }
         addTrackingArea(NSTrackingArea(rect: bounds,
-                                       options: [.mouseMoved, .activeAlways, .inVisibleRect],
+                                       options: [.mouseMoved, .mouseEnteredAndExited,
+                                                 .activeAlways, .inVisibleRect],
                                        owner: self, userInfo: nil))
     }
 
@@ -366,6 +415,21 @@ final class SwitcherView: NSView {
         return index < rows.count ? index : nil
     }
 
+    /// Re-reads hover from where the pointer actually is.
+    private func refreshHover() {
+        guard let window, window.isVisible else { return }
+        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        let target = bounds.contains(point) ? closeRect(at: point) : nil
+        hoveredRow = target?.index
+        closeHovered = target.map { $0.rect.contains(point) } ?? false
+    }
+
+    /// The close button of the row under `point`, if the pointer is on a row at all.
+    private func closeRect(at point: NSPoint) -> (index: Int, rect: NSRect)? {
+        guard point.y >= headerHeight, let index = rowIndex(at: point) else { return nil }
+        return (index, closeRect(in: rowRect(for: index)))
+    }
+
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
 
@@ -375,9 +439,26 @@ final class SwitcherView: NSView {
             needsDisplay = true
         }
 
+        let target = closeRect(at: point)
+        let row = target?.index
+        let overClose = target.map { $0.rect.contains(point) } ?? false
+        if row != hoveredRow || overClose != closeHovered {
+            hoveredRow = row
+            closeHovered = overClose
+            needsDisplay = true
+        }
+
         // Moving across the header must not drag the selection with it.
-        guard point.y >= headerHeight, let index = rowIndex(at: point) else { return }
-        onHover?(index)
+        guard let row else { return }
+        onHover?(row)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        guard hoveredRow != nil || gearHovered else { return }
+        hoveredRow = nil
+        closeHovered = false
+        gearHovered = false
+        needsDisplay = true
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -386,8 +467,14 @@ final class SwitcherView: NSView {
             onSettings?()
             return
         }
-        guard point.y >= headerHeight, let index = rowIndex(at: point) else { return }
-        onClick?(index)
+        guard let target = closeRect(at: point) else { return }
+        // The close button sits inside the row, so it has to be tested before the row itself —
+        // otherwise closing a window would switch to it on the way out.
+        if target.rect.contains(point) {
+            onClose?(target.index)
+        } else {
+            onClick?(target.index)
+        }
     }
 
     override func scrollWheel(with event: NSEvent) {

@@ -25,6 +25,9 @@ enum SelfTest {
         }
         render(rows: matching, query: query, config: config, to: "\(base)-filtered.png")
         render(rows: [], query: "no such window", config: config, to: "\(base)-nomatch.png")
+        // The per-row close button only appears under the pointer, which an offscreen render has
+        // to stand in for.
+        render(rows: rows, hovered: 3, config: config, to: "\(base)-hover.png")
         renderSettings(config: config, to: "\(base)-settings.png")
         return true
     }
@@ -48,11 +51,12 @@ enum SelfTest {
     }
 
     private static func render(rows: [SwitcherView.Row], query: String = "",
-                               config: Config, to path: String) {
+                               hovered: Int? = nil, config: Config, to path: String) {
         let view = SwitcherView()
         view.configure(rowHeight: config.rowHeight, maxVisibleRows: config.maxVisibleRows)
         view.setQuery(query)
         view.setRows(rows, selected: max(0, min(1, rows.count - 1)))
+        view.hoverRow(hovered)
         view.frame = NSRect(x: 0, y: 0, width: config.panelWidth, height: view.contentHeight)
 
         // Render over a stand-in for blurred wallpaper rather than a flat fill. Flat backdrops
