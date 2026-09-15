@@ -25,8 +25,8 @@ enum SelfTest {
         }
         render(rows: matching, query: query, config: config, to: "\(base)-filtered.png")
         render(rows: [], query: "no such window", config: config, to: "\(base)-nomatch.png")
-        // The per-row close button only appears under the pointer, which an offscreen render has
-        // to stand in for.
+        // The per-row close and mark buttons only appear under the pointer, which an offscreen
+        // render has to stand in for.
         render(rows: rows, hovered: 3, config: config, to: "\(base)-hover.png")
         renderSettings(config: config, to: "\(base)-settings.png")
         return true
@@ -42,11 +42,14 @@ enum SelfTest {
                              title: sampleTitles[index % sampleTitles.count],
                              pid: app.processIdentifier,
                              isMinimized: index % 5 == 3,
-                             isAppHidden: app.isHidden)
+                             isAppHidden: app.isHidden,
+                             // A couple of numbered rows, so the render shows both a marked row
+                             // and a selected marked row.
+                             mark: index < 2 ? index + 1 : nil)
         }
         return rows.isEmpty
             ? [SwitcherView.Row(appName: "Finder", title: "Downloads", pid: 0,
-                                isMinimized: false, isAppHidden: false)]
+                                isMinimized: false, isAppHidden: false, mark: 1)]
             : rows
     }
 

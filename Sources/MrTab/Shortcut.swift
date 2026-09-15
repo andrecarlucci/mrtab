@@ -28,42 +28,21 @@ struct Shortcut: Equatable {
         !modifiers.contains(.shift)
     }
 
-    var carbonModifiers: UInt32 {
-        var carbon: UInt32 = 0
-        if modifiers.contains(.command) { carbon |= UInt32(cmdKey) }
-        if modifiers.contains(.option) { carbon |= UInt32(optionKey) }
-        if modifiers.contains(.control) { carbon |= UInt32(controlKey) }
-        if modifiers.contains(.shift) { carbon |= UInt32(shiftKey) }
-        return carbon
-    }
+    var carbonModifiers: UInt32 { modifiers.carbon }
 
-    /// Rendered in the order Apple uses in menus: control, option, shift, command.
-    var displayString: String {
-        var result = ""
-        if modifiers.contains(.control) { result += "\u{2303}" }
-        if modifiers.contains(.option) { result += "\u{2325}" }
-        if modifiers.contains(.shift) { result += "\u{21E7}" }
-        if modifiers.contains(.command) { result += "\u{2318}" }
-        return result + KeyNames.name(for: keyCode)
-    }
+    var displayString: String { modifiers.symbols + KeyNames.name(for: keyCode) }
 
     // MARK: - Persistence
 
-    private static let modifierNames: [(NSEvent.ModifierFlags, String)] = [
-        (.control, "control"), (.option, "option"), (.shift, "shift"), (.command, "command"),
-    ]
-
     var json: [String: Any] {
-        ["keyCode": Int(keyCode),
-         "modifiers": Self.modifierNames.filter { modifiers.contains($0.0) }.map(\.1)]
+        ["keyCode": Int(keyCode), "modifiers": modifiers.names]
     }
 
     static func from(json: [String: Any]) -> Shortcut? {
         guard let keyCode = json["keyCode"] as? Int,
               let names = json["modifiers"] as? [String] else { return nil }
-        var flags = NSEvent.ModifierFlags()
-        for (flag, name) in modifierNames where names.contains(name) { flags.insert(flag) }
-        return Shortcut(keyCode: UInt16(keyCode), modifiers: flags)
+        return Shortcut(keyCode: UInt16(keyCode),
+                        modifiers: NSEvent.ModifierFlags(names: names))
     }
 
     /// Reads the original `{"modifier": "option", "key": "tab"}` form, so a config file written
@@ -85,6 +64,90 @@ struct Shortcut: Equatable {
         default: keyCode = kVK_Tab
         }
         return Shortcut(keyCode: UInt16(keyCode), modifiers: flags)
+    }
+}
+
+/// The chord that goes straight to a numbered window, without the list ever appearing: these
+/// modifiers plus one of the digits 1-9.
+///
+/// Only the modifiers are configurable. The digits are the point of the thing, and holding the
+/// modifiers down means the nine keys are one gesture each rather than a mode to enter and leave.
+/// No modifiers at all means off, since bare 1-9 would swallow typing everywhere.
+struct JumpShortcut: Equatable {
+    var modifiers: NSEvent.ModifierFlags
+
+    /// ⌥ pairs with the default switcher shortcut and is the easiest chord to reach without
+    /// moving your hand. It costs the characters ⌥ 1-9 used to type — ¡™£¢∞§¶•ª — which is
+    /// what the setting is for; ⌃⌥ is the obvious alternative.
+    static let `default` = JumpShortcut(modifiers: [.option])
+    static let off = JumpShortcut(modifiers: [])
+
+    /// A holdable modifier is required for the same reason the switcher needs one, and Shift
+    /// alone is not holdable enough to be worth the digits it would cost.
+    var isEnabled: Bool {
+        !modifiers.intersection([.command, .option, .control]).isEmpty
+    }
+
+    var carbonModifiers: UInt32 { modifiers.carbon }
+
+    var displayString: String { isEnabled ? modifiers.symbols + "1-9" : "Off" }
+
+    /// `kVK_ANSI_1`-`9` are not contiguous, so they are listed rather than counted. Index 0 is
+    /// the number 1: there is no mark zero.
+    static let digitKeyCodes: [UInt16] = [
+        UInt16(kVK_ANSI_1), UInt16(kVK_ANSI_2), UInt16(kVK_ANSI_3), UInt16(kVK_ANSI_4),
+        UInt16(kVK_ANSI_5), UInt16(kVK_ANSI_6), UInt16(kVK_ANSI_7), UInt16(kVK_ANSI_8),
+        UInt16(kVK_ANSI_9),
+    ]
+
+    /// The number a key code stands for, or nil if it is not one of 1-9.
+    static func digit(forKeyCode keyCode: UInt16) -> Int? {
+        digitKeyCodes.firstIndex(of: keyCode).map { $0 + 1 }
+    }
+
+    var json: [String: Any] { ["modifiers": modifiers.names] }
+
+    static func from(json: [String: Any]) -> JumpShortcut? {
+        guard let names = json["modifiers"] as? [String] else { return nil }
+        return JumpShortcut(modifiers: NSEvent.ModifierFlags(names: names))
+    }
+}
+
+extension NSEvent.ModifierFlags {
+    /// The four modifiers a shortcut may use. Everything else macOS reports — caps lock, the
+    /// numeric keypad flag, the device-dependent bits — is noise here.
+    static let shortcutMask: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
+
+    var carbon: UInt32 {
+        var result: UInt32 = 0
+        if contains(.command) { result |= UInt32(cmdKey) }
+        if contains(.option) { result |= UInt32(optionKey) }
+        if contains(.control) { result |= UInt32(controlKey) }
+        if contains(.shift) { result |= UInt32(shiftKey) }
+        return result
+    }
+
+    /// Rendered in the order Apple uses in menus: control, option, shift, command.
+    var symbols: String {
+        var result = ""
+        if contains(.control) { result += "\u{2303}" }
+        if contains(.option) { result += "\u{2325}" }
+        if contains(.shift) { result += "\u{21E7}" }
+        if contains(.command) { result += "\u{2318}" }
+        return result
+    }
+
+    private static let names: [(NSEvent.ModifierFlags, String)] = [
+        (.control, "control"), (.option, "option"), (.shift, "shift"), (.command, "command"),
+    ]
+
+    var names: [String] {
+        Self.names.filter { contains($0.0) }.map(\.1)
+    }
+
+    init(names: [String]) {
+        self.init()
+        for (flag, name) in Self.names where names.contains(name) { insert(flag) }
     }
 }
 

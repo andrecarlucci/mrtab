@@ -23,6 +23,7 @@ enum PanelScreen: String {
 
 struct Config: Equatable {
     var shortcut: Shortcut = .default
+    var jump: JumpShortcut = .default
 
     var includeMinimized = true
     var includeHidden = true
@@ -53,6 +54,10 @@ struct Config: Equatable {
         }
         if !config.shortcut.isValid { config.shortcut = .default }
 
+        if let raw = json["jump"] as? [String: Any], let jump = JumpShortcut.from(json: raw) {
+            config.jump = jump
+        }
+
         if let value = json["includeMinimized"] as? Bool { config.includeMinimized = value }
         if let value = json["includeHidden"] as? Bool { config.includeHidden = value }
         if let value = json["showAllSpaces"] as? Bool { config.showAllSpaces = value }
@@ -69,6 +74,7 @@ struct Config: Equatable {
     func save() {
         let json: [String: Any] = [
             "shortcut": shortcut.json,
+            "jump": jump.json,
             "includeMinimized": includeMinimized,
             "includeHidden": includeHidden,
             "showAllSpaces": showAllSpaces,

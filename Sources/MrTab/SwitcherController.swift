@@ -15,6 +15,8 @@ final class SwitcherController {
     /// Everything the switcher opened with; `entries` is that list after the filter.
     private var allEntries: [WindowEntry] = []
     private var entries: [WindowEntry] = []
+    /// The numbers the user has pinned to windows, kept between showings.
+    private let marks = WindowMarks()
     private var query = ""
     /// Set by the first typed character. Searching is an unhurried, two-handed act and holding
     /// the browse modifier through it is not, so typing pins the panel open: release stops
@@ -47,6 +49,9 @@ final class SwitcherController {
         }
         panel.switcherView.onClose = { [weak self] index in
             self?.closeWindow(at: index)
+        }
+        panel.switcherView.onMark = { [weak self] index in
+            self?.toggleMark(at: index)
         }
         panel.switcherView.onSettings = { [weak self] in
             // Dismiss without switching, and without handing focus back to the previous app --
@@ -88,6 +93,7 @@ final class SwitcherController {
         entries = allEntries
         query = ""
         isPinned = false
+        pruneMarks()
         Log.write("show with \(entries.count) windows")
         guard !entries.isEmpty else {
             Log.write("nothing to show: window snapshot is empty")
@@ -112,13 +118,48 @@ final class SwitcherController {
     private func render(selected: Int) {
         let rows = entries.map {
             SwitcherView.Row(appName: $0.appName, title: $0.title, pid: $0.pid,
-                             isMinimized: $0.isMinimized, isAppHidden: $0.isAppHidden)
+                             isMinimized: $0.isMinimized, isAppHidden: $0.isAppHidden,
+                             mark: marks.mark(for: $0.ref))
         }
         panel.switcherView.setQuery(query)
         panel.switcherView.setRows(rows, selected: selected)
         // The panel is sized to its contents, and filtering changes the row count on every
         // keystroke, so this has to run again each time rather than only on show.
         panel.positionForDisplay(width: config.panelWidth)
+    }
+
+    // MARK: - Marking
+
+    /// Clicking the ring takes the row's number away if it has one, and otherwise hands it the
+    /// lowest number nobody is using, so the numbers close up behind you rather than drifting
+    /// upwards as windows come and go.
+    private func toggleMark(at index: Int) {
+        guard index < entries.count else { return }
+        marks.toggle(entries[index].ref)
+        render(selected: panel.switcherView.selectedIndex)
+    }
+
+    /// Goes straight to the window wearing `number`, with the list never appearing — this is
+    /// what the jump chord is for. Digits stay ordinary characters inside the switcher itself,
+    /// where they filter like any other key.
+    ///
+    /// The window is looked up among every window MrTab tracks rather than the listed ones, so a
+    /// number still reaches a window that the current settings would keep out of the list.
+    func jump(toMark number: Int) {
+        pruneMarks()
+        guard let ref = marks.ref(for: number), let entry = store.liveWindows[ref] else {
+            Log.write("jump \(number): no window is wearing that number")
+            return
+        }
+        Log.write("jump \(number): \(entry.appName) — \(entry.title)")
+        if isVisible { hide() }
+        focus(entry)
+    }
+
+    /// Windows that have gone away hand their numbers back, so the next mark gets the lowest one
+    /// that is genuinely free and a stale number never shadows a live window.
+    private func pruneMarks() {
+        marks.prune(keeping: Set(store.liveWindows.keys))
     }
 
     // MARK: - Filtering
@@ -334,6 +375,7 @@ final class SwitcherController {
             AXUIElementPerformAction(button, kAXPressAction as CFString)
         }
 
+        marks.forget(entry.ref)
         allEntries.removeAll { $0.ref == entry.ref }
         entries.remove(at: index)
         if allEntries.isEmpty {

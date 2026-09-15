@@ -29,6 +29,10 @@ struct WindowEntry {
 final class WindowStore {
     /// Main-thread-only. Read this from the hotkey handler; never touch AX there.
     private(set) var snapshot: [WindowEntry] = []
+    /// Main-thread-only. Every window MrTab tracks, including the ones the current settings keep
+    /// out of `snapshot`. Marks are resolved and pruned against this rather than the visible list,
+    /// so a numbered window can still be jumped to while it is minimised or its app is hidden.
+    private(set) var liveWindows: [AXRef: WindowEntry] = [:]
 
     private var config: Config
     private let queue = DispatchQueue(label: "dev.mrtab.store", qos: .userInitiated)
@@ -426,9 +430,11 @@ final class WindowStore {
             return true
         }
         let sorted = visible.sorted { $0.focusStamp > $1.focusStamp }
+        let live = entries
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.snapshot = sorted
+            self.liveWindows = live
             IconCache.shared.warm(pids: sorted.map(\.pid))
         }
     }

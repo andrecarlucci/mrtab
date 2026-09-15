@@ -7,6 +7,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     private let onChange: (Config) -> Void
 
     private var recorder: ShortcutRecorderView!
+    private var jumpRecorder: ShortcutRecorderView!
     private var minimizedBox: NSButton!
     private var hiddenBox: NSButton!
     private var spacesBox: NSButton!
@@ -97,6 +98,11 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             self?.update { $0.shortcut = shortcut }
         }
 
+        jumpRecorder = ShortcutRecorderView(jump: config.jump)
+        jumpRecorder.onJumpChange = { [weak self] jump in
+            self?.update { $0.jump = jump }
+        }
+
         minimizedBox = checkbox("Include minimized windows", config.includeMinimized,
                                 #selector(toggleMinimized))
         hiddenBox = checkbox("Include windows of hidden apps", config.includeHidden,
@@ -129,10 +135,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
 
         let stack = NSStackView(views: [
             banner,
-            section("Shortcut", [
+            section("Shortcuts", [
                 labelled("Open switcher", recorder),
                 hint("Hold the modifier to keep browsing. Tap Tab to move down the list, "
                      + "\u{21E7} to move back up, and release to switch."),
+                labelled("Jump to number", jumpRecorder),
+                hint("Press this with 1-9 to go straight to a numbered window, without the "
+                     + "switcher appearing. Number a window by clicking the ring at the right of "
+                     + "its row. Record it by pressing the chord itself; Delete turns it off."),
             ]),
             section("Windows to list", [minimizedBox, hiddenBox, spacesBox]),
             section("Appearance", [
@@ -339,6 +349,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     func refresh(config: Config) {
         self.config = config
         recorder.set(config.shortcut)
+        jumpRecorder.set(config.jump)
         minimizedBox.state = config.includeMinimized ? .on : .off
         hiddenBox.state = config.includeHidden ? .on : .off
         spacesBox.state = config.showAllSpaces ? .on : .off

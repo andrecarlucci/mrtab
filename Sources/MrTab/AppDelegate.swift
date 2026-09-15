@@ -9,6 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var settings: SettingsWindowController?
 
+    private var shortcutTaken = false
+    private var jumpTaken = false
+
     private enum Tag: Int {
         case status = 1
         case login = 2
@@ -48,6 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Log.write("hotkey fired")
             self?.controller.trigger()
         }
+        hotKeys.onJump = { [weak self] number in
+            self?.controller.jump(toMark: number)
+        }
 
         showSettingsIfUserLaunched()
 
@@ -56,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             Log.write("accessibility trust granted; starting store")
             self.store.start()
-            self.registerHotKey()
+            self.registerHotKeys()
         }
     }
 
@@ -117,22 +123,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Configuration
 
     private func applyConfig(_ updated: Config) {
-        let shortcutChanged = updated.shortcut != config.shortcut
+        let keysChanged = updated.shortcut != config.shortcut || updated.jump != config.jump
         config = updated
         store?.update(config: config)
         controller?.apply(config: config)
-        if shortcutChanged { registerHotKey() }
+        if keysChanged { registerHotKeys() }
         refreshStatusItemTitle()
     }
 
-    private func registerHotKey() {
+    private func registerHotKeys() {
         let status = hotKeys.register(shortcut: config.shortcut)
         Log.write("hotkey register \(config.displayName): status=\(status)")
-        if status == noErr {
-            refreshStatusItemTitle()
-        } else {
-            warnHotKeyUnavailable()
-        }
+        shortcutTaken = status != noErr
+
+        let jumpStatus = hotKeys.register(jump: config.jump)
+        Log.write("jump register \(config.jump.displayString): status=\(jumpStatus)")
+        jumpTaken = jumpStatus != noErr
+
+        refreshStatusItemTitle()
     }
 
     private func openSettings() {
@@ -191,13 +199,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.item(withTag: Tag.login.rawValue)?.state = LoginItem.isEnabled ? .on : .off
     }
 
+    /// A hot key another app already owns is the one failure the user cannot see: the shortcut
+    /// simply does nothing. The menu bar item is where they will look, so it says so there.
     private func refreshStatusItemTitle() {
-        statusItem?.menu?.item(withTag: Tag.status.rawValue)?.title = "Shortcut: \(config.displayName)"
-    }
-
-    private func warnHotKeyUnavailable() {
-        statusItem?.menu?.item(withTag: Tag.status.rawValue)?.title =
-            "\(config.displayName) is taken by another app"
+        let title: String
+        if shortcutTaken {
+            title = "\(config.displayName) is taken by another app"
+        } else if jumpTaken {
+            title = "\(config.jump.displayString) is taken by another app"
+        } else if config.jump.isEnabled {
+            title = "Shortcut: \(config.displayName)   Jump: \(config.jump.displayString)"
+        } else {
+            title = "Shortcut: \(config.displayName)"
+        }
+        statusItem?.menu?.item(withTag: Tag.status.rawValue)?.title = title
     }
 
     // MARK: - Menu actions

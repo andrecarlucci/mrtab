@@ -13,11 +13,14 @@ final class SwitcherView: NSView {
         let pid: pid_t
         let isMinimized: Bool
         let isAppHidden: Bool
+        /// 1-9 if the window has been given a number, `nil` otherwise.
+        let mark: Int?
     }
 
     var onHover: ((Int) -> Void)?
     var onClick: ((Int) -> Void)?
     var onClose: ((Int) -> Void)?
+    var onMark: ((Int) -> Void)?
     var onSettings: (() -> Void)?
 
     private(set) var rows: [Row] = []
@@ -46,6 +49,7 @@ final class SwitcherView: NSView {
     private let headerHeight: CGFloat = 38
     private let gearSide: CGFloat = 16
     private let closeSide: CGFloat = 16
+    private let markSide: CGFloat = 16
 
     /// Left edge of the icon column, and of the text column beside it. The header uses these too,
     /// so the app icon and the word MrTab line up with the rows below rather than being placed
@@ -56,10 +60,19 @@ final class SwitcherView: NSView {
     private var gearRect: NSRect = .zero
     private var gearHovered = false
 
-    /// The row under the pointer, which is the only one showing its close button, and whether the
-    /// pointer is on that button rather than elsewhere in the row.
+    /// The row under the pointer, which is the only one showing its close and mark buttons, and
+    /// which of those the pointer is on rather than elsewhere in the row.
     private var hoveredRow: Int?
     private var closeHovered = false
+    private var markHovered = false
+
+    /// What a point in a row lands on. The two buttons sit at the right edge; everything else is
+    /// the row itself.
+    enum Target {
+        case row
+        case mark
+        case close
+    }
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -78,15 +91,18 @@ final class SwitcherView: NSView {
         self.titleStrings = rows.map { Self.titleString(for: $0) }
         // Measuring once here keeps the per-row draw free of text metrics.
         self.widestAppName = appStrings.reduce(0) { max($0, $1.size().width) }
-        self.scrollOffset = 0
+        // The scroll position is kept and merely re-clamped: numbering or closing a row hands the
+        // same list back, and having it jump to the top under the pointer would be maddening.
+        // Filtering moves the selection to the top anyway, which drags the offset with it.
         clampScroll()
         needsDisplay = true
     }
 
-    /// Test seam: an offscreen render has no pointer, and the close button only shows under one.
+    /// Test seam: an offscreen render has no pointer, and the row buttons only show under one.
     func hoverRow(_ index: Int?) {
         hoveredRow = index
         closeHovered = false
+        markHovered = false
         needsDisplay = true
     }
 
@@ -215,14 +231,18 @@ final class SwitcherView: NSView {
             in: iconRect, from: .zero, operation: .sourceOver,
             fraction: row.isMinimized || row.isAppHidden ? 0.55 : 1.0)
 
-        // The close button's room is reserved on every row, hovered or not, so that text never
+        // The two buttons' room is reserved on every row, hovered or not, so that text never
         // reflows under the pointer.
         let close = closeRect(in: rect)
         if hovered, let cross = Self.closeIcon {
             cross.draw(in: close, from: .zero, operation: .sourceOver,
                        fraction: closeHovered ? 1.0 : 0.45)
         }
-        let rightEdge = close.minX - 6
+
+        let mark = markRect(in: rect)
+        drawMark(row.mark, in: mark, selected: selected, hovered: hovered)
+
+        let rightEdge = mark.minX - 6
 
         var badgeWidth: CGFloat = 0
         if let badge = badgeText(for: row) {
@@ -251,6 +271,33 @@ final class SwitcherView: NSView {
     private func closeRect(in rect: NSRect) -> NSRect {
         NSRect(x: rect.maxX - iconGap - closeSide, y: rect.midY - closeSide / 2,
                width: closeSide, height: closeSide)
+    }
+
+    private func markRect(in rect: NSRect) -> NSRect {
+        NSRect(x: closeRect(in: rect).minX - 8 - markSide, y: rect.midY - markSide / 2,
+               width: markSide, height: markSide)
+    }
+
+    /// A numbered window wears its number always, because that is the whole point of having given
+    /// it one. An unnumbered one shows a dashed ring only under the pointer, like the close
+    /// button beside it.
+    private func drawMark(_ number: Int?, in rect: NSRect, selected: Bool, hovered: Bool) {
+        guard let number else {
+            guard hovered, let ring = Self.markIcon else { return }
+            ring.draw(in: rect, from: .zero, operation: .sourceOver,
+                      fraction: markHovered ? 1.0 : 0.45)
+            return
+        }
+
+        (selected ? NSColor.white : NSColor.controlAccentColor).setFill()
+        NSBezierPath(ovalIn: rect).fill()
+
+        let digit = NSAttributedString(string: String(number), attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .bold),
+            .foregroundColor: selected ? NSColor.controlAccentColor : NSColor.white,
+        ])
+        let size = digit.size()
+        digit.draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2))
     }
 
     private func drawHeader() {
@@ -338,6 +385,14 @@ final class SwitcherView: NSView {
         return symbol.tinted(with: .labelColor)
     }()
 
+    private static let markIcon: NSImage? = {
+        let configuration = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        guard let symbol = NSImage(systemSymbolName: "circle.dashed",
+                                   accessibilityDescription: "Give this window a number")?
+            .withSymbolConfiguration(configuration) else { return nil }
+        return symbol.tinted(with: .labelColor)
+    }()
+
     private static let brandIcon: NSImage? = {
         guard let icon = NSApp.applicationIconImage else { return nil }
         let scaled = NSImage(size: NSSize(width: iconSide, height: iconSide))
@@ -419,15 +474,21 @@ final class SwitcherView: NSView {
     private func refreshHover() {
         guard let window, window.isVisible else { return }
         let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
-        let target = bounds.contains(point) ? closeRect(at: point) : nil
+        let target = bounds.contains(point) ? hit(at: point) : nil
         hoveredRow = target?.index
-        closeHovered = target.map { $0.rect.contains(point) } ?? false
+        closeHovered = target?.target == .close
+        markHovered = target?.target == .mark
     }
 
-    /// The close button of the row under `point`, if the pointer is on a row at all.
-    private func closeRect(at point: NSPoint) -> (index: Int, rect: NSRect)? {
+    /// What the pointer is on, if it is on a row at all. The buttons sit inside the row, so they
+    /// have to be tested before the row itself — otherwise closing or numbering a window would
+    /// switch to it on the way out.
+    private func hit(at point: NSPoint) -> (index: Int, target: Target)? {
         guard point.y >= headerHeight, let index = rowIndex(at: point) else { return nil }
-        return (index, closeRect(in: rowRect(for: index)))
+        let rect = rowRect(for: index)
+        if closeRect(in: rect).contains(point) { return (index, .close) }
+        if markRect(in: rect).contains(point) { return (index, .mark) }
+        return (index, .row)
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -439,12 +500,14 @@ final class SwitcherView: NSView {
             needsDisplay = true
         }
 
-        let target = closeRect(at: point)
+        let target = hit(at: point)
         let row = target?.index
-        let overClose = target.map { $0.rect.contains(point) } ?? false
-        if row != hoveredRow || overClose != closeHovered {
+        let overClose = target?.target == .close
+        let overMark = target?.target == .mark
+        if row != hoveredRow || overClose != closeHovered || overMark != markHovered {
             hoveredRow = row
             closeHovered = overClose
+            markHovered = overMark
             needsDisplay = true
         }
 
@@ -457,6 +520,7 @@ final class SwitcherView: NSView {
         guard hoveredRow != nil || gearHovered else { return }
         hoveredRow = nil
         closeHovered = false
+        markHovered = false
         gearHovered = false
         needsDisplay = true
     }
@@ -467,13 +531,11 @@ final class SwitcherView: NSView {
             onSettings?()
             return
         }
-        guard let target = closeRect(at: point) else { return }
-        // The close button sits inside the row, so it has to be tested before the row itself —
-        // otherwise closing a window would switch to it on the way out.
-        if target.rect.contains(point) {
-            onClose?(target.index)
-        } else {
-            onClick?(target.index)
+        guard let target = hit(at: point) else { return }
+        switch target.target {
+        case .close: onClose?(target.index)
+        case .mark: onMark?(target.index)
+        case .row: onClick?(target.index)
         }
     }
 

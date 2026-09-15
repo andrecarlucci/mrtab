@@ -88,7 +88,7 @@ final class SwitcherPanel: NSPanel {
     /// first real invocation is not paying for it. Called once, off-screen, at launch.
     func prewarm() {
         switcherView.setRows([SwitcherView.Row(appName: "\u{200B}", title: "", pid: 0,
-                                               isMinimized: false, isAppHidden: false)],
+                                               isMinimized: false, isAppHidden: false, mark: nil)],
                              selected: 0)
         setFrame(NSRect(x: -10_000, y: -10_000, width: frame.width, height: 100), display: true)
         orderFront(nil)

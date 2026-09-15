@@ -80,9 +80,11 @@ a-z, 0-9   filter the list down to what you type
 Esc        clear the filter, or cancel and stay where you are
 Return     switch immediately
 ⌘ W        close the highlighted window
+
+⌥ 1-9      switch to a numbered window, from anywhere, without opening the list
 ```
 
-The shortcut is whatever you set it to; `⌥ Tab` is only the default.
+Both are whatever you set them to; `⌥ Tab` and `⌥ 1-9` are only the defaults.
 
 `⌘ Tab` is left alone — the macOS app switcher keeps working as it always did.
 
@@ -113,19 +115,54 @@ up, so you can shut several in a row without reopening it. It is the same thing 
 highlighted row, and it appears only under the pointer — an ✕ on all twelve rows at once is noise,
 and the space it needs is reserved on every row regardless, so nothing reflows as you move.
 
+Just left of the ✕ is a dashed ring, which appears under the pointer for the same reason.
+
+### Numbering windows
+
+Clicking the ring gives that window a number, drawn in its place as a filled badge. The first
+window you click gets **1**, the next **2**, and so on up to **9**. Clicking a numbered badge takes
+the number away again, and the next window you number takes the lowest one going spare — so the
+numbers close up behind you rather than creeping upwards as you change your mind.
+
+A number is worth having because of what it buys outside the switcher: **⌥ with a digit goes
+straight to that window from anywhere, with the list never appearing at all.** The terminal you
+keep coming back to is one chord away, in one motion, whatever is in front of you — no list to
+open, nothing to read, nothing to aim at. Inside the switcher digits are ordinary characters again
+and filter like any other key.
+
+⌥ is the default because it pairs with `⌥ Tab` and is the easiest chord to hit without moving
+your hand. It does cost you the characters ⌥ 1-9 used to type — ¡™£¢∞§¶•ª — so if you want
+those, `⌃⌥` is the obvious second choice: ⌃ 1-9 alone is how Mission Control switches Spaces, but
+the pair is free. Change it in Settings, or switch it off there entirely.
+
+Numbers stick to the window, not to its position in the list, so a window keeps its badge as it
+drifts down the most-recently-used order. Jumping reaches a numbered window even when the current
+settings would keep it out of the list — minimized, hidden, on another Space — which is rather
+the point of having numbered it. They last as long as MrTab is running and are not written to
+disk; closing the window frees its number for the next one.
+
+Unlike typing, numbering does not pin the panel open: like the ✕, it is something you do with
+the switcher held, so keep the modifier down while you click.
+
 ## Settings
 
 Reachable three ways: the gear in the panel header, **Settings…** (⌘,) on the menu bar item, or
 simply opening MrTab again from Applications or the Dock.
 
-It covers the shortcut, which windows get listed, the panel's proportions, and whether MrTab opens
-at login. There is no OK or Cancel — changes apply the moment you make them and are written
+It covers the two shortcuts, which windows get listed, the panel's proportions, and whether MrTab
+opens at login. There is no OK or Cancel — changes apply the moment you make them and are written
 straight to disk, which suits a utility whose whole surface is a handful of toggles.
 
 **Changing the shortcut.** Click the shortcut field and press the combination you want. It has to
 include ⌘, ⌥ or ⌃: the modifier is not decoration, it is what holds the switcher open while you
 browse. Shift alone will not do, because Shift already means "step backwards". Esc leaves the
 field unchanged.
+
+**Jump to number** is the chord that reaches a numbered window directly. Record it by pressing the
+whole thing — the modifiers *and* a digit — so a chord another app has already taken announces
+itself there rather than by silently doing nothing later. Only the modifiers are kept; the digit
+you happened to press is not part of the setting. Delete switches jumping off, which the switcher's
+own shortcut has no equivalent of, since without that one there is no way in at all.
 
 **Show on** decides which display the switcher opens on when you have more than one. *Screen with
 the pointer* is the default and follows your mouse; *Main screen* pins it to the display carrying
@@ -148,6 +185,7 @@ restart MrTab to apply.
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `shortcut` | `{"keyCode": 48, "modifiers": ["option"]}` | Virtual key code plus modifier names |
+| `jump` | `{"modifiers": ["option"]}` | Modifiers that pair with 1-9; `[]` switches jumping off |
 | `includeMinimized` | `true` | List minimized windows |
 | `includeHidden` | `true` | List windows of hidden apps |
 | `showAllSpaces` | `true` | When `false`, only windows on the current Space |
@@ -304,7 +342,8 @@ suspect a leftover, `pgrep -xl MrTab` should print exactly one line.
 | `SwitcherPanel.swift` | The floating `NSPanel`, created once and pre-warmed |
 | `SwitcherView.swift` | Hand-drawn header and row rendering, hover and click hit testing |
 | `WindowFilter.swift` | Matching the list against what the user typed |
-| `HotKey.swift` | Carbon `RegisterEventHotKey` registration |
+| `WindowMarks.swift` | The numbers 1-9 pinned to windows by hand |
+| `HotKey.swift` | Carbon `RegisterEventHotKey` registration, for the shortcut and the nine jump chords |
 | `AXHelpers.swift` | Typed wrappers over the Accessibility C API |
 | `Permissions.swift` | Accessibility trust checks and polling |
 | `IconCache.swift` | Pre-scaled app icons by pid |
@@ -320,9 +359,11 @@ suspect a leftover, `pgrep -xl MrTab` should print exactly one line.
 ### Checking the UI without running it
 
 `MRTAB_RENDER=/tmp/shot.png build/MrTab.app/Contents/MacOS/MrTab` writes five PNGs and exits: the
-plain switcher, a filter with matches, a filter with none, a row hovered with its close button
-showing, and the settings pane. It needs no Accessibility and no Screen Recording, so it works in
-any context, and it is how the layout gets checked.
+plain switcher, a filter with matches, a filter with none, a row hovered with its close button and
+mark ring showing, and the settings pane. Two rows carry numbers in every shot, one of them
+selected, since a badge is drawn against the accent fill there rather than against the panel. It
+needs no Accessibility and no Screen Recording, so it works in any context, and it is how the
+layout gets checked.
 
 The switcher is rendered over a stand-in for colourful wallpaper rather than a flat fill. A flat
 backdrop flatters the design and hides the only contrast that matters — the panel is translucent,
